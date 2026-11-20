@@ -8,11 +8,13 @@ od razu, bez otwierania okna.
 from __future__ import annotations
 
 import argparse
+import io
 import logging
 import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
 
 from . import __version__
 from .batch import BatchError, number_folder
@@ -119,6 +121,9 @@ def run_batch(files: list[str], options: NumberOptions, dialogs: DialogHost | No
         except (NumberingError, PathError, OptionsError) as exc:
             failed.append(f"{name}: {exc}")
             log.warning("Błąd dla %s: %s", name, exc)
+        except Exception as exc:  # noqa: BLE001 - jeden plik nie może zatrzymać reszty
+            failed.append(f"{name}: nieoczekiwany błąd: {exc}")
+            log.exception("Nieoczekiwany błąd dla %s", name)
 
     if quiet:
         pass
@@ -235,15 +240,61 @@ def run_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+def show_crash(message: str, log_path: Path | None = None) -> None:
+    """Pokazuje czytelny komunikat zamiast tracebacku Pythona."""
+    text = message
+    if log_path is not None:
+        text += f"\n\nSzczegóły zapisano w pliku:\n{log_path}"
+    if sys.stdout is not None:
+        safe_print(text)
+        return
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("PDF Numerator - błąd", text)
+        root.destroy()
+    except Exception:  # noqa: BLE001 - brak Tk to nie powód, żeby wywalić program
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    # Bez konsoli sys.stderr jest None - argparse wywaliłby się przy komunikacie błędu.
+    captured = io.StringIO()
+    if sys.stderr is None:
+        sys.stderr = captured
+
+    try:
+        args = build_parser().parse_args(argv)
+    except SystemExit as exc:
+        if exc.code not in (0, None) and captured.getvalue().strip():
+            show_crash(captured.getvalue().strip())
+        raise
+
     log_path = setup_logging()
     log.info("Start PDF Numerator %s, log: %s", __version__, log_path)
 
     try:
+        return _run(args, log_path)
+    except SystemExit:
+        raise
+    except BaseException:  # noqa: BLE001 - ostatnia siatka bezpieczeństwa
+        log.exception("Nieoczekiwany błąd aplikacji")
+        show_crash(
+            "Wystąpił nieoczekiwany błąd. Spróbuj ponownie, a jeśli się powtarza, "
+            "prześlij plik logu.",
+            log_path,
+        )
+        return 1
+
+
+def _run(args: argparse.Namespace, log_path: Path) -> int:
+    try:
         options = options_from_args(args)
     except OptionsError as exc:
-        safe_print(f"Błąd ustawień: {exc}")
+        show_crash(f"Błąd ustawień: {exc}")
         return 2
 
     if args.files or args.cli or args.folder:

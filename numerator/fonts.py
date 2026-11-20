@@ -1,4 +1,10 @@
-"""Wybór czcionki do numeracji: pakowana DejaVu Sans, awaryjnie font systemowy lub helv."""
+"""Wybór czcionki do numeracji.
+
+Domyślnie używamy wbudowanej czcionki PDF (Helvetica, kodowanie WinAnsi) - nie wymaga
+osadzania, więc pliki wynikowe rosną o kilka kilobajtów i **oryginalne czcionki dokumentu
+pozostają nietknięte**. Czcionkę Unicode (DejaVu Sans) osadzamy tylko wtedy, gdy tekst
+numeru zawiera znaki spoza WinAnsi (np. polskie diakrytyki w szablonie).
+"""
 
 from __future__ import annotations
 
@@ -10,8 +16,11 @@ import pymupdf
 
 BUNDLED_FONT_NAME = "DejaVuSans.ttf"
 
-# Kolejność awaryjna: fonty systemowe Windows z pełną obsługą polskich znaków.
+# Kolejność awaryjna: fonty systemowe Windows z pełnym zestawem polskich znaków.
 SYSTEM_FONTS = ("segoeui.ttf", "arial.ttf", "tahoma.ttf", "calibri.ttf")
+
+ASCII_FONT_NAME = "helv"
+UNICODE_FONT_NAME = "PDFNumerator"
 
 _POLISH_MAP = str.maketrans(
     {
@@ -51,74 +60,90 @@ def font_candidates() -> list[Path]:
 
 
 def to_ascii(text: str) -> str:
-    """Usuwa polskie znaki - dla bazowego fontu PDF bez pełnego zestawu glifów."""
+    """Usuwa polskie znaki - dla bazowej czcionki PDF bez pełnego zestawu glifów."""
     converted = text.translate(_POLISH_MAP)
     return "".join(ch for ch in converted if 32 <= ord(ch) < 127)
 
 
+def fits_winansi(text: str) -> bool:
+    """Czy tekst da się zapisać kodowaniem WinAnsi (czcionki bazowe PDF)?"""
+    try:
+        text.encode("cp1252")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 @dataclass
 class TextRenderer:
-    """Rysuje tekst numeru, radząc sobie z brakiem czcionki Unicode."""
+    """Rysuje tekst numeru, wybierając czcionkę odpowiednio do treści."""
 
     font_size: float
     color: tuple[float, float, float] = (0.0, 0.0, 0.0)
     opacity: float = 1.0
 
     def __post_init__(self) -> None:
-        self._candidates = font_candidates()
-        self._font_file: Path | None = None
-        self._font_name = "helv"
-        self._font = pymupdf.Font("helv")
-        self.used_fallback = False
-        self._select()
+        self._ascii_font = pymupdf.Font(ASCII_FONT_NAME)
+        self._unicode_font: pymupdf.Font | None = None
+        self._unicode_path: Path | None = None
+        self._unicode_checked = False
+        self.used_fallback = False  # True, gdy potrzebne były diakrytyki, a brak fontu
 
-    def _select(self) -> None:
-        for path in self._candidates:
+    # -- wybór czcionki -------------------------------------------------------
+
+    def _load_unicode_font(self) -> bool:
+        if self._unicode_checked:
+            return self._unicode_font is not None
+        self._unicode_checked = True
+        for path in font_candidates():
             try:
                 font = pymupdf.Font(fontfile=str(path))
                 # Test osadzenia na tymczasowej stronie - odrzuca fonty z zakazem osadzania.
                 probe = pymupdf.open()
                 page = probe.new_page()
-                page.insert_text((10, 10), "Test 0/0", fontname="Probe", fontfile=str(path))
+                page.insert_text((10, 10), "Zażółć", fontname="Probe", fontfile=str(path))
                 probe.close()
             except Exception:
                 continue
-            self._font_file = path
-            self._font_name = "PDFNumerator"
-            self._font = font
-            return
-        # Ostatnia deska ratunku: bazowy Helvetica (tylko ASCII).
+            self._unicode_font = font
+            self._unicode_path = path
+            return True
+        return False
+
+    def _prepare(self, text: str) -> tuple[str, pymupdf.Font, str, Path | None]:
+        """Dobiera czcionkę do tekstu: bazowa dla ASCII/WinAnsi, DejaVu dla reszty."""
+        if fits_winansi(text):
+            return text, self._ascii_font, ASCII_FONT_NAME, None
+        if self._load_unicode_font():
+            assert self._unicode_font is not None
+            return text, self._unicode_font, UNICODE_FONT_NAME, self._unicode_path
         self.used_fallback = True
+        return to_ascii(text), self._ascii_font, ASCII_FONT_NAME, None
+
+    # -- miary ---------------------------------------------------------------
 
     @property
     def supports_unicode(self) -> bool:
-        return not self.used_fallback
+        return self._load_unicode_font()
 
-    @property
-    def ascender(self) -> float:
-        return self._font.ascender
-
-    @property
-    def descender(self) -> float:
-        """Wysokość części znaków poniżej linii bazowej (wartość dodatnia)."""
-        return max(0.0, -self._font.descender)
+    def metrics(self, text: str) -> tuple[float, float]:
+        """(wznios, głębokość) w jednostkach em dla czcionki wybranej dla tekstu."""
+        _, font, _, _ = self._prepare(text)
+        return font.ascender, max(0.0, -font.descender)
 
     def measure(self, text: str) -> float:
-        return self._font.text_length(self._sanitize(text, measure=True), fontsize=self.font_size)
-
-    def _sanitize(self, text: str, *, measure: bool = False) -> str:
-        if self.supports_unicode:
-            return text
-        return to_ascii(text)
+        prepared, font, _, _ = self._prepare(text)
+        return font.text_length(prepared, fontsize=self.font_size)
 
     def draw(self, page: pymupdf.Page, point: pymupdf.Point, text: str) -> None:
+        prepared, _, font_name, font_path = self._prepare(text)
         kwargs = {
             "fontsize": self.font_size,
             "rotate": page.rotation,
             "fill": self.color,
             "fill_opacity": self.opacity,
-            "fontname": self._font_name,
+            "fontname": font_name,
         }
-        if self._font_file is not None:
-            kwargs["fontfile"] = str(self._font_file)
-        page.insert_text(point, self._sanitize(text), **kwargs)
+        if font_path is not None:
+            kwargs["fontfile"] = str(font_path)
+        page.insert_text(point, prepared, **kwargs)

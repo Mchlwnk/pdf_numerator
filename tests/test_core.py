@@ -80,6 +80,13 @@ def _count_pixels(page: pymupdf.Page, predicate, dpi: int = 72) -> int:
     return count
 
 
+def _region_bytes(page: pymupdf.Page, rect: tuple[float, float, float, float],
+                  dpi: int = 72) -> bytes:
+    """Piksele wycinka strony (do porównania „przed/po" bez obszaru numeru)."""
+    pix = page.get_pixmap(dpi=dpi, clip=pymupdf.Rect(*rect))
+    return bytes(pix.samples)
+
+
 def labels_in_band(page: pymupdf.Page, low: float = 0.65, high: float = 1.0) -> str:
     """Tekst linii leżących w dolnej (albo wskazanej) części strony."""
     height = page.rect.height
@@ -388,6 +395,42 @@ def main() -> int:
                 centers.append((bbox[0] + bbox[2]) / 2)
             ok_center = all(abs(value - 150) <= 6 for value in centers)
         check("lustro nie rusza numeru wyśrodkowanego", ok_center, str(centers))
+
+        print("[16] integralność czcionek oryginału")
+        dejavu = Path("numerator") / "fonts" / "DejaVuSans.ttf"
+        rich = pymupdf.open()
+        rich_page = rich.new_page(width=400, height=300)
+        rich_page.insert_text((40, 60), "Zażółć gęślą jaźń", fontsize=14,
+                              fontname="DJ", fontfile=str(dejavu))
+        rich_page.insert_text((40, 100), "Original text ABC 123", fontsize=12)
+        rich.save(tmp / "bogaty.pdf")
+        rich.close()
+
+        with pymupdf.open(tmp / "bogaty.pdf") as doc:
+            fonts_before = [entry[3] for entry in doc[0].get_fonts()]
+            text_before = doc[0].get_text()
+            pixels_before = _region_bytes(doc[0], (0, 0, 400, 200))
+        check("oryginał ma osadzoną czcionkę", len(fonts_before) >= 2, str(fonts_before))
+
+        result = number_pdf(tmp / "bogaty.pdf", NumberOptions(template="{n}"))
+        with pymupdf.open(result.output_path) as doc:
+            fonts_after = [entry[3] for entry in doc[0].get_fonts()]
+            text_after = doc[0].get_text()
+            pixels_after = _region_bytes(doc[0], (0, 0, 400, 200))
+        check("czcionki oryginału bez zmian", fonts_after == fonts_before,
+              f"{fonts_before} -> {fonts_after}")
+        check("tekst oryginału bez zmian", text_after.startswith(text_before.strip()),
+              repr(text_after[:80]))
+        check("piksele oryginału bez zmian", pixels_before == pixels_after)
+
+        result = number_pdf(tmp / "bogaty.pdf", NumberOptions(
+            template="Strona {n} z {total} — żąćęłńóśź"))
+        with pymupdf.open(result.output_path) as doc:
+            text_pl = doc[0].get_text()
+            fonts_pl = [entry[3] for entry in doc[0].get_fonts()]
+        check("polski szablon zapisany", "Strona 1 z 1 — żąćęłńóśź" in text_pl, repr(text_pl[-60:]))
+        check("czcionka Unicode tylko gdy potrzebna",
+              any("DejaVu" in name for name in fonts_pl), str(fonts_pl))
 
     print()
     if failures:

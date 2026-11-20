@@ -119,6 +119,7 @@ hooks/
 tests/
   test_core.py     # rdzeń: pozycje, obroty, zakresy, style, dodatek, maska, podgląd
   test_server.py   # API: token, staging, podgląd, folder, pobieranie
+  test_dialogs.py  # okna podsumowania i błędów w trybie "przeciągnij na EXE"
 ```
 
 Testy:
@@ -126,7 +127,17 @@ Testy:
 ```powershell
 python tests\test_core.py
 python tests\test_server.py
+python tests\test_dialogs.py
 ```
+
+## Rozwiązywanie problemów
+
+- **Okno z błędem po przeciągnięciu pliku na EXE** — zajrzyj do logu
+  `%LOCALAPPDATA%\PDFNumerator\logs\pdf-numerator.log`; program zapisuje tam pełny ślad błędu.
+- **Numer wygląda jak puste prostokąty** — użyj aktualnej wersji (od 0.4.2 program nie
+  przycina czcionek dokumentu, co powodowało ten efekt).
+- **Brak numeru na niektórych stronach** — sprawdź „Zakresy stron", „Pomiń pierwsze strony"
+  i „Dodatek od strony"; pole pod podglądem pokazuje dokładnie, co trafi na stronę.
 
 ## Bezpieczeństwo
 

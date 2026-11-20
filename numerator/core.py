@@ -302,7 +302,8 @@ def _draw_number(
     else:
         x = (visible.width - width) / 2
 
-    ascent = renderer.ascender * renderer.font_size
+    ascent_em, descent_em = renderer.metrics(label)
+    ascent = ascent_em * renderer.font_size
     if vertical == "top":
         y = margin + ascent
     elif vertical == "bottom":
@@ -339,7 +340,7 @@ def _draw_number(
             x - pad,
             y - ascent - pad,
             x + width + pad,
-            y + renderer.descender * renderer.font_size + pad,
+            y + descent_em * renderer.font_size + pad,
         ) * page.derotation_matrix
         page.draw_rect(box, color=None, fill=(1.0, 1.0, 1.0), width=0, overlay=True)
 
@@ -358,10 +359,9 @@ def _save_atomically(doc: pymupdf.Document, output_path: Path) -> None:
     os.close(handle)
     temp_path = Path(temp_name)
     try:
-        try:
-            doc.subset_fonts()
-        except Exception:
-            pass  # starsze wersje PyMuPDF nie mają tej metody - nie jest krytyczna
+        # Celowo bez doc.subset_fonts(): przycinanie czcionek potrafi uszkodzić
+        # oryginalne fonty dokumentu (tekst zamienia się w puste prostokąty).
+        # Nasze numery korzystają z czcionki bazowej, więc nie ma czego przycinać.
         doc.save(str(temp_path), garbage=3, deflate=True)
         _verify_pdf(temp_path, doc.page_count)
         os.replace(temp_path, output_path)

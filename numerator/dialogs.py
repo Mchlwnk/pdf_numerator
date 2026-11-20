@@ -110,10 +110,10 @@ class DialogHost:
 
     # -- wywołania z innych wątków -------------------------------------------
 
-    def _submit(self, kind: str, timeout: float, **kwargs):
+    def _submit(self, action: str, timeout: float, **kwargs):
         if not self.available or self._root is None:
             raise DialogUnavailable("Okno systemowe jest niedostępne.")
-        job = _Job(kind=kind, kwargs=kwargs)
+        job = _Job(kind=action, kwargs=kwargs)
         if not self._mainloop_running and threading.current_thread() is threading.main_thread():
             # Tryb wsadowy: nie ma pętli zdarzeń, więc okno pokazujemy od razu.
             job.result = self._execute(job)

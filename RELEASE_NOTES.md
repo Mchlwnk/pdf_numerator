@@ -27,12 +27,19 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
+- **naprawa: błąd Pythona po przeciągnięciu pliku na EXE** — okno podsumowania
+  (`show_info`/`show_error`) wywalało się na kolizji nazw parametrów; numerowanie działało,
+  ale zamiast podsumowania pojawiał się traceback,
+- **naprawa: puste prostokąty zamiast numeru** — program nie przycina już czcionek
+  (`subset_fonts()`), które potrafiło uszkodzić tekst oryginału; domyślnie używana jest
+  wbudowana czcionka PDF, więc pliki rosną minimalnie, a czcionki dokumentu są nietknięte,
+- **czytelne komunikaty błędów** — nieoczekiwany błąd trafia do logu i pokazuje krótkie
+  okno zamiast tracebacku,
 - **dokładny tekst numeru pod podglądem** — pole pokazuje gotową treść, jaka trafi na
   oglądaną stronę, z uwzględnieniem szablonu, stylu cyfr, numeracji dodatku i pominiętych
-  stron (np. `Strona iv z xii`), więc przed zapisem widać efekt ustawień dodatkowych,
+  stron (np. `Strona iv z xii`),
 - **numeracja naprzemienna** — na stronach parzystych numer przechodzi na przeciwną stronę
-  (klasyczny układ do druku dwustronnego); działa też z maskowaniem starego numeru,
-- pakiet wydania z sumą kontrolną SHA-256 i instrukcją uruchomienia.
+  (klasyczny układ do druku dwustronnego); działa też z maskowaniem starego numeru.
 
 ## Najważniejsze funkcje
 
