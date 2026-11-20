@@ -63,10 +63,12 @@ w przeglądarce (localStorage) — „Przywróć domyślne" czyści je.
 
 ## Pobieranie gotowego programu (Release)
 
-Wydania z plikiem `PDFNumerator.exe` i sumą kontrolną są na
-[stronie Releases](https://github.com/Mchlwnk/pdf_numerator/releases).
+Repozytorium jest **prywatne**, więc wydania widzisz tylko po zalogowaniu na swoje konto:
+[strona Releases](https://github.com/Mchlwnk/pdf_numerator/releases) (autor: `Mchlwnk`).
+Jeśli chcesz przekazać program komuś innemu, wyślij mu plik `PDFNumerator.exe` bezpośrednio —
+nie potrzebuje on konta na GitHubie ani Pythona.
 
-1. Pobierz `PDFNumerator.exe` (ok. 30 MB, nie wymaga instalacji ani Pythona).
+1. Pobierz `PDFNumerator.exe` (ok. 30 MB, nie wymaga instalacji).
 2. Uruchom plik — otworzy się interfejs w przeglądarce.
 3. Windows może pokazać ostrzeżenie SmartScreen („Nieznany wydawca") przy pierwszym
    uruchomieniu — to normalne dla niepodpisanych programów; wybierz „Więcej informacji"
@@ -79,7 +81,14 @@ Weryfikacja pliku (PowerShell):
 Get-FileHash .\PDFNumerator.exe -Algorithm SHA256
 ```
 
-Suma kontrolna jest podana w opisie każdego wydania.
+Suma kontrolna jest podana w opisie każdego wydania (dla 0.4.0:
+`33BF723AD925A76C704A016D57D89BCDA31FAECEC0CA79653EE30FC50F192F3F`).
+
+Nowe wydanie publikujesz jedną komendą (wymaga `gh auth login`):
+
+```powershell
+.\release.ps1
+```
 
 ## Budowanie pliku EXE
 
