@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Numerator</title>
+<style>
+  :root {
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e3e6ee;
+    --accent: #4f46e5;
+    --accent-dark: #4338ca;
+    --accent-soft: #eef0ff;
+    --ok: #0f9d58;
+    --ok-soft: #e8f7ef;
+    --err: #c0392b;
+    --err-soft: #fdeceb;
+    --warn: #8a6d1f;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 24px -12px rgba(16, 24, 40, .18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 24px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, .8);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -.01em; }
+  .logo {
+    display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 15px;
+  }
+  .badge {
+    font-weight: 500; font-size: 11px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
+  }
+  main { width: 100%; max-width: 1000px; margin: 0 auto; padding: 30px 20px 60px; flex: 1; }
+  h1 { font-size: 26px; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 8px; }
+  .lead { color: var(--muted); margin: 0 0 18px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .modes {
+    display: inline-flex; padding: 3px; gap: 2px; margin-bottom: 18px;
+    background: #e9ebf2; border-radius: 11px;
+  }
+  .mode {
+    font: inherit; font-size: 13.5px; font-weight: 600; border: 0; cursor: pointer;
+    padding: 7px 16px; border-radius: 9px; background: transparent; color: var(--muted);
+  }
+  .mode:hover { color: var(--ink); }
+  .mode.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(16, 24, 40, .12); }
+  .dropzone {
+    position: relative; display: grid; place-items: center; gap: 6px;
+    padding: 26px 24px; text-align: center; cursor: pointer;
+    border: 2px dashed #c9cee0; border-radius: var(--radius);
+    background: var(--card); transition: border-color .15s, background .15s, transform .1s;
+    outline: none;
+  }
+  .dropzone:hover, .dropzone:focus-visible { border-color: var(--accent); background: #fbfbff; }
+  .dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.005); }
+  .dropzone.busy { pointer-events: none; opacity: .6; }
+  .dz-icon {
+    width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); font-size: 19px;
+  }
+  .dz-title { font-weight: 600; }
+  .dz-sub { color: var(--muted); font-size: 13px; }
+  .fileinfo {
+    margin-top: 14px; padding: 13px 16px; display: flex; gap: 14px; align-items: center;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .file-ico {
+    width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center;
+    background: #fdeaea; color: #c0392b; font-size: 12px; font-weight: 700; flex: none;
+  }
+  .file-meta { min-width: 0; flex: 1; }
+  .file-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-sub { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folder-card { margin-top: 0; padding: 18px 20px; }
+  .folder-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+  .folder-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .folder-path { margin-top: 12px; font-size: 12.5px; color: var(--muted); word-break: break-all; }
+  .folder-path strong { color: var(--ink); }
+  .workspace {
+    display: grid; grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 20px; align-items: start; margin-top: 20px;
+  }
+  .workspace.single { grid-template-columns: 1fr; }
+  .options { padding: 20px 22px 22px; }
+  .options h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 16px; }
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 5px; }
+  .pos-grid { display: inline-grid; grid-template-columns: repeat(3, 34px); gap: 5px; }
+  .pos-grid input { position: absolute; opacity: 0; pointer-events: none; }
+  .pos-grid label {
+    width: 34px; height: 27px; display: grid; place-items: center; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 7px; background: #fff;
+  }
+  .pos-grid label span { width: 13px; height: 3px; border-radius: 2px; background: #b9c0d4; }
+  .pos-grid input:checked + label { border-color: var(--accent); background: var(--accent-soft); }
+  .pos-grid input:checked + label span { background: var(--accent); }
+  .pos-grid input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  input[type="text"], input[type="number"], select {
+    width: 100%; padding: 9px 11px; font: inherit; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 9px; background: #fff;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79, 70, 229, .12);
+  }
+  input[type="color"] {
+    width: 46px; height: 34px; padding: 2px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; cursor: pointer;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > .field { flex: 1 1 130px; margin-bottom: 0; }
+  .inline { display: flex; align-items: center; gap: 10px; }
+  .inline .value { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); min-width: 38px; }
+  .checkline { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+  .checkline input { margin-top: 3px; accent-color: var(--accent); }
+  details { margin-top: 2px; }
+  summary { cursor: pointer; font-size: 13.5px; color: var(--muted); font-weight: 600; }
+  summary:hover { color: var(--accent); }
+  details[open] summary { margin-bottom: 16px; }
+  .actions { margin-top: 20px; }
+  button.primary, button.secondary, button.ghost, button.icon-btn {
+    font: inherit; font-weight: 600; border-radius: 10px; cursor: pointer;
+    border: 1px solid transparent; padding: 11px 20px;
+  }
+  button.primary { background: var(--accent); color: #fff; width: 100%; font-size: 15px; }
+  button.primary:hover:not(:disabled) { background: var(--accent-dark); }
+  button.primary:disabled { opacity: .45; cursor: not-allowed; }
+  button.secondary { background: #fff; border-color: var(--line); color: var(--ink); }
+  button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.ghost { background: transparent; border-color: var(--line); color: var(--muted); padding: 6px 12px; }
+  button.ghost:hover { color: var(--ink); border-color: #c9cee0; }
+  button.icon-btn { padding: 4px 10px; background: #fff; border-color: var(--line); color: var(--ink); line-height: 1.2; }
+  button.icon-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .progress { display: flex; align-items: center; gap: 12px; margin-top: 16px; color: var(--muted); font-size: 13.5px; }
+  .bar { position: relative; flex: 1; height: 6px; border-radius: 3px; background: var(--accent-soft); overflow: hidden; }
+  .bar::after {
+    content: ""; position: absolute; inset: 0; width: 40%;
+    background: var(--accent); border-radius: 3px;
+    animation: slide 1.1s ease-in-out infinite;
+  }
+  @keyframes slide { 0% { left: -40%; } 100% { left: 100%; } }
+  .alert {
+    margin-top: 16px; padding: 12px 15px; border-radius: 10px;
+    background: var(--err-soft); color: #8d2418; border: 1px solid #f5c9c4; font-size: 14px;
+  }
+  .result { margin-top: 20px; padding: 22px; }
+  .result-head { display: flex; gap: 12px; align-items: flex-start; }
+  .check {
+    width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    background: var(--ok-soft); color: var(--ok); font-size: 16px;
+  }
+  .check.warn { background: #fdf6e3; color: var(--warn); }
+  .result h3 { margin: 2px 0 4px; font-size: 17px; }
+  .result p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .path {
+    margin: 14px 0; padding: 10px 12px; border-radius: 9px; background: #f7f8fc;
+    border: 1px solid var(--line); font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 12.5px; word-break: break-all;
+  }
+  .warnings { margin: 12px 0 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
+  .filelist {
+    margin: 12px 0 0; padding: 0; list-style: none; max-height: 240px; overflow: auto;
+    border: 1px solid var(--line); border-radius: 9px;
+  }
+  .filelist li {
+    display: flex; gap: 10px; justify-content: space-between; align-items: baseline;
+    padding: 7px 12px; font-size: 12.5px; border-bottom: 1px solid #f1f2f7;
+  }
+  .filelist li:last-child { border-bottom: 0; }
+  .filelist .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filelist .out { color: var(--muted); flex: none; }
+  .filelist li.error { background: #fdf3f2; }
+  .filelist li.error .out { color: var(--err); }
+
+  .preview { position: sticky; top: 20px; padding: 16px; }
+  .preview-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px; font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .preview-meta { font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 12px; }
+  .preview-source {
+    font-size: 11.5px; color: var(--muted); margin: -4px 0 8px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .preview-frame {
+    position: relative; display: grid; place-items: center; min-height: 260px;
+    background: #eceef4; border-radius: 10px; padding: 10px; overflow: hidden;
+  }
+  .preview-frame img {
+    max-width: 100%; max-height: 420px; display: block;
+    background: #fff; box-shadow: 0 2px 10px rgba(16, 24, 40, .16); border-radius: 2px;
+  }
+  .preview-empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 20px 6px; }
+  .preview-loading {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(236, 238, 244, .75); color: var(--muted); font-size: 12.5px;
+    backdrop-filter: blur(1px);
+  }
+  .preview-note {
+    margin-top: 8px; font-size: 12px; color: var(--warn);
+    background: #fdf6e3; border: 1px solid #f0e2b6; border-radius: 8px; padding: 6px 9px;
+  }
+  .preview-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted);
+  }
+  .preview-nav .pages { font-variant-numeric: tabular-nums; }
+  footer {
+    padding: 16px 24px; text-align: center; color: var(--muted); font-size: 12.5px;
+    border-top: 1px solid var(--line);
+  }
+  .hidden { display: none !important; }
+  @media (max-width: 900px) {
+    .workspace { grid-template-columns: 1fr; }
+    .preview { position: static; order: -1; }
+    .preview-frame img { max-height: 340px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">▤</span> PDF Numerator <span class="badge">v{{VERSION}}</span></div>
+  <button class="ghost" id="quitBtn" title="Zamknij program i serwer lokalny">Zamknij</button>
+</header>
+
+<main>
+  <h1>Ponumeruj strony PDF</h1>
+  <p class="lead">Program zapisuje kopię z numerami obok oryginału. Oryginały zostają nietknięte.</p>
+
+  <div class="modes" role="tablist" aria-label="Tryb pracy">
+    <button class="mode active" id="modeFile" role="tab" aria-selected="true">Jeden plik</button>
+    <button class="mode" id="modeFolder" role="tab" aria-selected="false">Cały folder</button>
+  </div>
+
+  <!-- tryb: jeden plik -->
+  <div id="fileBlock">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Wybierz lub przeciągnij dokument PDF">
+      <div class="dz-icon">⬆</div>
+      <div class="dz-title" id="dzTitle">Wybierz plik PDF z dysku</div>
+      <div class="dz-sub" id="dzSub">albo przeciągnij go tutaj</div>
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" class="hidden">
+
+    <div class="fileinfo hidden" id="fileInfo">
+      <div class="file-ico">PDF</div>
+      <div class="file-meta">
+        <div class="file-name" id="fileName">—</div>
+        <div class="file-sub" id="fileSub">—</div>
+      </div>
+      <button class="chip" id="changeBtn">Zmień</button>
+    </div>
+  </div>
+
+  <!-- tryb: folder -->
+  <div id="folderBlock" class="hidden">
+    <section class="card folder-card">
+      <h2>Folder z dokumentami</h2>
+      <div class="folder-actions">
+        <button class="secondary" id="pickFolderBtn">Wybierz folder...</button>
+        <label class="checkline" style="margin-left:4px">
+          <input type="checkbox" id="recursive">
+          <span>uwzględnij podfoldery</span>
+        </label>
+      </div>
+      <div class="inline" style="margin-top:12px">
+        <input type="text" id="folderPathInput" placeholder="albo wpisz ścieżkę folderu, np. C:\\dokumenty" spellcheck="false">
+        <button class="secondary" id="loadFolderBtn" style="flex:none">Wczytaj</button>
+      </div>
+      <div class="folder-path" id="folderInfo">Nie wybrano folderu.</div>
+    </section>
+  </div>
+
+  <div class="workspace hidden" id="workspace">
+    <section class="card options">
+      <h2>Ustawienia numeracji</h2>
+
+      <div class="field">
+        <span class="label">Pozycja numeru</span>
+        <div class="pos-grid" id="posGrid" role="radiogroup" aria-label="Pozycja numeru"></div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="template">Format numeru</label>
+        <div class="chips" id="templateChips">
+          <button class="chip" data-template="{n}">1</button>
+          <button class="chip" data-template="{n} / {total}">1 / N</button>
+          <button class="chip" data-template="Strona {n} z {total}">Strona 1 z N</button>
+        </div>
+        <input type="text" id="template" value="{n}" spellcheck="false">
+        <div class="hint">Znaczniki: <code>{n}</code> - numer strony, <code>{total}</code> - ostatni numer. Przykład: <strong id="templatePreview">1</strong></div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="label" for="style">Styl cyfr</label>
+          <select id="style">
+            <option value="arabic">arabskie (1, 2, 3)</option>
+            <option value="roman">rzymskie małe (i, ii, iii)</option>
+            <option value="ROMAN">rzymskie duże (I, II, III)</option>
+            <option value="alpha">litery małe (a, b, c)</option>
+            <option value="ALPHA">litery duże (A, B, C)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="skipFirst">Pomiń pierwsze strony</label>
+          <input type="number" id="skipFirst" min="0" max="9999" step="1" value="0">
+        </div>
+        <div class="field">
+          <label class="label" for="startAt">Pierwszy numer</label>
+          <input type="number" id="startAt" min="0" max="999999" step="1" value="1">
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:18px">
+        <details>
+          <summary>Więcej opcji</summary>
+
+          <div class="field">
+            <label class="label" for="pages">Zakresy stron</label>
+            <input type="text" id="pages" placeholder="np. 1-10,15,20-" spellcheck="false">
+            <div class="hint">Puste = wszystkie strony. Zapis jak w drukarce: <code>1-10</code>, <code>15</code>, <code>20-</code>.</div>
+          </div>
+
+          <div class="row" style="margin-bottom:14px">
+            <div class="field">
+              <label class="label" for="appendixFrom">Dodatek od strony</label>
+              <input type="number" id="appendixFrom" min="0" max="99999" step="1" value="0">
+              <div class="hint">0 = brak. Dodatek numerowany jest od nowa.</div>
+            </div>
+            <div class="field">
+              <label class="label" for="appendixStyle">Styl dodatku</label>
+              <select id="appendixStyle">
+                <option value="roman">rzymskie małe (i, ii)</option>
+                <option value="ROMAN">rzymskie duże (I, II)</option>
+                <option value="alpha">litery (a, b)</option>
+                <option value="ALPHA">litery duże (A, B)</option>
+                <option value="arabic">arabskie (1, 2)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" style="margin-bottom:14px">
+            <div class="field">
+              <label class="label" for="fontSize">Rozmiar czcionki (pt)</label>
+              <input type="number" id="fontSize" min="4" max="72" step="0.5" value="11">
+            </div>
+            <div class="field">
+              <label class="label" for="margin">Margines (mm)</label>
+              <input type="number" id="margin" min="0" max="80" step="1" value="10">
+            </div>
+          </div>
+
+          <div class="row" style="margin-bottom:14px">
+            <div class="field">
+              <label class="label" for="color">Kolor numeru</label>
+              <div class="inline">
+                <input type="color" id="color" value="#111111" aria-label="Kolor numeru">
+                <div style="flex:1">
+                  <label class="label" for="opacity" style="font-weight:500;font-size:12.5px;margin-bottom:2px">Krycie</label>
+                  <div class="inline">
+                    <input type="range" id="opacity" min="0.15" max="1" step="0.05" value="1">
+                    <span class="value" id="opacityValue">100%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="background">Tło pod numerem</label>
+              <label class="checkline" style="font-weight:500">
+                <input type="checkbox" id="background">
+                <span>biały prostokąt</span>
+              </label>
+              <div class="hint">Przydatne na skanach i grafikach.</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="maskExisting">Zamaluj istniejący numer</label>
+            <label class="checkline">
+              <input type="checkbox" id="maskExisting">
+              <span>zakryj stary numer białym prostokątem</span>
+            </label>
+            <div class="row" style="margin-top:10px">
+              <div class="field">
+                <label class="label" for="maskWidth" style="font-weight:500;font-size:12.5px">Szerokość (mm)</label>
+                <input type="number" id="maskWidth" min="2" max="200" step="1" value="14">
+              </div>
+              <div class="field">
+                <label class="label" for="maskHeight" style="font-weight:500;font-size:12.5px">Wysokość (mm)</label>
+                <input type="number" id="maskHeight" min="2" max="200" step="1" value="5">
+              </div>
+            </div>
+            <div class="hint">Prostokąt stoi w tym samym miejscu co nowy numer. Podgląd pokazuje efekt.</div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="suffix">Końcówka nazwy pliku</label>
+            <input type="text" id="suffix" value="_numerowany" spellcheck="false">
+            <div class="hint">np. <code>raport_numerowany.pdf</code>. Pliki z tą końcówką są pomijane przy pracy na folderze.</div>
+          </div>
+
+          <button class="chip" id="resetOptions">Przywróć domyślne</button>
+        </details>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="runBtn" disabled>Ponumeruj strony</button>
+      </div>
+      <div class="progress hidden" id="progress">
+        <div class="bar"></div>
+        <span id="progressText">Numeruję...</span>
+      </div>
+    </section>
+
+    <aside class="card preview" id="previewCard">
+      <div class="preview-head">
+        <span>Podgląd</span>
+        <span class="preview-meta" id="previewMeta">—</span>
+      </div>
+      <div class="preview-source hidden" id="previewSource"></div>
+      <div class="preview-frame" id="previewFrame">
+        <div class="preview-empty" id="previewEmpty">Wybierz plik, aby zobaczyć podgląd.</div>
+        <img id="previewImg" alt="" class="hidden">
+        <div class="preview-loading hidden" id="previewLoading">renderuję…</div>
+      </div>
+      <div class="preview-note hidden" id="previewNote">Ta strona nie będzie numerowana.</div>
+      <div class="preview-nav">
+        <button class="icon-btn" id="prevPage" aria-label="Poprzednia strona" disabled>‹</button>
+        <span class="pages" id="previewPage">–</span>
+        <button class="icon-btn" id="nextPage" aria-label="Następna strona" disabled>›</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="alert hidden" id="errorBox" role="alert"></div>
+
+  <section class="card result hidden" id="resultCard">
+    <div class="result-head">
+      <div class="check" id="resultIcon">✓</div>
+      <div>
+        <h3 id="resultTitle">Gotowe</h3>
+        <p id="resultSub">—</p>
+      </div>
+    </div>
+    <div class="path" id="resultPath"></div>
+    <ul class="warnings hidden" id="resultWarnings"></ul>
+    <ul class="filelist hidden" id="resultList"></ul>
+    <div class="row">
+      <button class="secondary" id="revealBtn">Pokaż w folderze</button>
+      <button class="secondary" id="openBtn">Otwórz PDF</button>
+      <button class="secondary" id="againBtn">Numeruj kolejny</button>
+    </div>
+  </section>
+</main>
+
+<footer>Wszystko dzieje się lokalnie na Twoim komputerze — pliki nie są nigdzie wysyłane.</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var TOKEN = "{{TOKEN}}";
+  var POSITIONS = [
+    ["top-left", "Lewy górny"], ["top-center", "Środkowy górny"], ["top-right", "Prawy górny"],
+    ["middle-left", "Lewy środkowy"], ["middle-center", "Środek"], ["middle-right", "Prawy środkowy"],
+    ["bottom-left", "Lewy dolny"], ["bottom-center", "Środkowy dolny"], ["bottom-right", "Prawy dolny"]
+  ];
+  var MM_TO_PT = 72 / 25.4;
+  var PREVIEW_DEBOUNCE_MS = 260;
+  var STORAGE_KEY = "pdfnumerator.options.v1";
+
+  var state = {
+    mode: "file",
+    path: null,
+    name: null,
+    pages: null,
+    staged: false,
+    folder: null,
+    busy: false,
+    previewPage: null,
+    previewTotal: null,
+    previewSeq: 0,
+    lastResult: null
+  };
+  var canPick = false;
+  var previewTimer = null;
+  var saveTimer = null;
+  var previewUrl = null;
+
+  var el = function (id) { return document.getElementById(id); };
+  var dropzone = el("dropzone");
+  var fileInput = el("fileInput");
+  var workspace = el("workspace");
+  var runBtn = el("runBtn");
+  var previewImg = el("previewImg");
+  var previewLoading = el("previewLoading");
+  var previewEmpty = el("previewEmpty");
+  var previewNote = el("previewNote");
+  var prevBtn = el("prevPage");
+  var nextBtn = el("nextPage");
+
+  // --- siatka pozycji -------------------------------------------------------
+  var grid = el("posGrid");
+  POSITIONS.forEach(function (entry) {
+    var id = "pos-" + entry[0];
+    var input = document.createElement("input");
+    input.type = "radio"; input.name = "pos"; input.id = id; input.value = entry[0];
+    input.checked = entry[0] === "bottom-center";
+    input.setAttribute("aria-label", entry[1]);
+    var label = document.createElement("label");
+    label.setAttribute("for", id);
+    label.title = entry[1];
+    label.appendChild(document.createElement("span"));
+    grid.appendChild(input);
+    grid.appendChild(label);
+  });
+
+  // --- pomocnicze -----------------------------------------------------------
+  function api(path, data) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Token": TOKEN },
+      body: JSON.stringify(data || {})
+    }).then(function (response) {
+      return response.json().catch(function () {
+        return { ok: false, error: "Niepoprawna odpowiedź serwera (HTTP " + response.status + ")." };
+      }).then(function (payload) {
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || ("Błąd HTTP " + response.status));
+        }
+        return payload;
+      });
+    });
+  }
+
+  function apiBinary(path, data) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Token": TOKEN },
+      body: JSON.stringify(data || {})
+    }).then(function (response) {
+      if (!response.ok) {
+        return response.json().catch(function () { return {}; }).then(function (payload) {
+          throw new Error(payload.error || ("Błąd HTTP " + response.status));
+        });
+      }
+      return response.blob().then(function (blob) {
+        return { blob: blob, headers: response.headers };
+      });
+    });
+  }
+
+  function pageWord(count) {
+    if (count === 1) return "strona";
+    var rest = count % 10;
+    var tens = count % 100;
+    if (rest >= 2 && rest <= 4 && (tens < 12 || tens > 14)) return "strony";
+    return "stron";
+  }
+
+  function fileWord(count) {
+    if (count === 1) return "plik";
+    var rest = count % 10;
+    var tens = count % 100;
+    if (rest >= 2 && rest <= 4 && (tens < 12 || tens > 14)) return "pliki";
+    return "plików";
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes && bytes !== 0) return "";
+    var units = ["B", "KB", "MB", "GB"];
+    var index = 0;
+    var value = bytes;
+    while (value >= 1024 && index < units.length - 1) { value /= 1024; index += 1; }
+    return (value >= 10 || index === 0 ? Math.round(value) : value.toFixed(1)) + " " + units[index];
+  }
+
+  function showError(message) {
+    el("errorBox").textContent = message;
+    el("errorBox").classList.remove("hidden");
+  }
+
+  function clearError() { el("errorBox").classList.add("hidden"); }
+
+  function numeric(id, fallback) {
+    var value = parseFloat(el(id).value);
+    return isFinite(value) ? value : fallback;
+  }
+
+  function hexToRgb(hex) {
+    var match = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    if (!match) return [0, 0, 0];
+    var value = parseInt(match[1], 16);
+    return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+  }
+
+  function clamp(value, low, high) {
+    return Math.min(Math.max(value, low), high);
+  }
+
+  // --- opcje ----------------------------------------------------------------
+  function collectOptions() {
+    return {
+      position: document.querySelector('input[name="pos"]:checked').value,
+      margin: Math.max(0, numeric("margin", 10)) * MM_TO_PT,
+      font_size: clamp(numeric("fontSize", 11), 4, 72),
+      template: el("template").value.trim() || "{n}",
+      skip_first: Math.max(0, Math.round(numeric("skipFirst", 0))),
+      start_at: Math.max(0, Math.round(numeric("startAt", 1))),
+      pages: el("pages").value.trim(),
+      style: el("style").value,
+      appendix_from: Math.max(0, Math.round(numeric("appendixFrom", 0))),
+      appendix_style: el("appendixStyle").value,
+      color: hexToRgb(el("color").value),
+      opacity: clamp(numeric("opacity", 1), 0.15, 1),
+      background: el("background").checked,
+      mask_existing: el("maskExisting").checked,
+      mask_width: clamp(numeric("maskWidth", 14), 2, 200) * MM_TO_PT,
+      mask_height: clamp(numeric("maskHeight", 5), 2, 200) * MM_TO_PT,
+      suffix: el("suffix").value,
+      overwrite: false
+    };
+  }
+
+  // --- zapamiętywanie ustawień ---------------------------------------------
+  function formState() {
+    return {
+      mode: state.mode,
+      position: document.querySelector('input[name="pos"]:checked').value,
+      template: el("template").value,
+      skipFirst: el("skipFirst").value,
+      startAt: el("startAt").value,
+      pages: el("pages").value,
+      style: el("style").value,
+      appendixFrom: el("appendixFrom").value,
+      appendixStyle: el("appendixStyle").value,
+      fontSize: el("fontSize").value,
+      margin: el("margin").value,
+      color: el("color").value,
+      opacity: el("opacity").value,
+      background: el("background").checked,
+      maskExisting: el("maskExisting").checked,
+      maskWidth: el("maskWidth").value,
+      maskHeight: el("maskHeight").value,
+      suffix: el("suffix").value,
+      recursive: el("recursive").checked
+    };
+  }
+
+  function saveOptions() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formState()));
+    } catch (error) { /* tryb prywatny - ignorujemy */ }
+  }
+
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveOptions, 400);
+  }
+
+  function applyStoredOptions() {
+    var raw;
+    try { raw = localStorage.getItem(STORAGE_KEY); } catch (error) { return; }
+    if (!raw) return;
+    var data;
+    try { data = JSON.parse(raw); } catch (error) { return; }
+    if (!data || typeof data !== "object") return;
+
+    function setValue(id, value) {
+      if (value === undefined || value === null) return;
+      var node = el(id);
+      if (!node) return;
+      if (node.type === "checkbox") node.checked = !!value;
+      else node.value = String(value);
+    }
+
+    var radio = data.position && document.querySelector('input[name="pos"][value="' + data.position + '"]');
+    if (radio) radio.checked = true;
+    setValue("template", data.template);
+    setValue("skipFirst", data.skipFirst);
+    setValue("startAt", data.startAt);
+    setValue("pages", data.pages);
+    setValue("style", data.style);
+    setValue("appendixFrom", data.appendixFrom);
+    setValue("appendixStyle", data.appendixStyle);
+    setValue("fontSize", data.fontSize);
+    setValue("margin", data.margin);
+    setValue("color", data.color);
+    setValue("opacity", data.opacity);
+    setValue("background", data.background);
+    setValue("maskExisting", data.maskExisting);
+    setValue("maskWidth", data.maskWidth);
+    setValue("maskHeight", data.maskHeight);
+    setValue("suffix", data.suffix);
+    setValue("recursive", data.recursive);
+    updateOpacityLabel();
+  }
+
+  function resetOptions() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (error) { /* ignorujemy */ }
+    document.querySelector('input[name="pos"][value="bottom-center"]').checked = true;
+    el("template").value = "{n}";
+    el("skipFirst").value = "0";
+    el("startAt").value = "1";
+    el("pages").value = "";
+    el("style").value = "arabic";
+    el("appendixFrom").value = "0";
+    el("appendixStyle").value = "roman";
+    el("fontSize").value = "11";
+    el("margin").value = "10";
+    el("color").value = "#111111";
+    el("opacity").value = "1";
+    el("background").checked = false;
+    el("maskExisting").checked = false;
+    el("maskWidth").value = "14";
+    el("maskHeight").value = "5";
+    el("suffix").value = "_numerowany";
+    updateOpacityLabel();
+    updatePreviewExample();
+    schedulePreview(0);
+    scheduleSave();
+  }
+
+  // --- tryb pracy -----------------------------------------------------------
+  function setMode(mode) {
+    state.mode = mode;
+    el("modeFile").classList.toggle("active", mode === "file");
+    el("modeFolder").classList.toggle("active", mode === "folder");
+    el("modeFile").setAttribute("aria-selected", mode === "file" ? "true" : "false");
+    el("modeFolder").setAttribute("aria-selected", mode === "folder" ? "true" : "false");
+    el("fileBlock").classList.toggle("hidden", mode !== "file");
+    el("folderBlock").classList.toggle("hidden", mode !== "folder");
+    el("previewSource").classList.toggle("hidden", mode !== "folder");
+    el("againBtn").classList.toggle("hidden", mode === "folder");
+
+    var ready = mode === "file" ? !!state.path : !!state.folder;
+    workspace.classList.toggle("hidden", !ready);
+    runBtn.disabled = state.busy || !ready;
+    el("resultCard").classList.add("hidden");
+    clearError();
+    updateRunLabel();
+    schedulePreview(0);
+    scheduleSave();
+  }
+
+  function updateRunLabel() {
+    if (state.mode === "folder") {
+      var count = state.folder ? state.folder.pdf_count : 0;
+      runBtn.textContent = count ? "Ponumeruj " + count + " " + fileWord(count) : "Ponumeruj cały folder";
+    } else {
+      runBtn.textContent = "Ponumeruj strony";
+    }
+  }
+
+  // --- plik ----------------------------------------------------------------
+  function updateFileSub(size) {
+    var details = [];
+    if (state.pages) details.push(state.pages + " " + pageWord(state.pages));
+    if (size) details.push(formatBytes(size));
+    details.push(state.staged ? "zapis do folderu Pobrane" : "zapis obok oryginału");
+    el("fileSub").textContent = details.join(" · ");
+  }
+
+  function setFile(info) {
+    state.path = info.path || null;
+    state.name = info.name || "dokument.pdf";
+    state.pages = info.pages || null;
+    state.staged = !!info.staged;
+    state.previewPage = null;
+
+    el("fileName").textContent = state.name;
+    updateFileSub(info.size);
+    el("fileInfo").classList.remove("hidden");
+    workspace.classList.remove("hidden");
+    el("resultCard").classList.add("hidden");
+    clearError();
+    updatePreviewExample();
+    schedulePreview(0);
+    if (state.mode === "file") runBtn.disabled = !state.path;
+  }
+
+  function resetFile() {
+    state.path = null; state.name = null; state.pages = null; state.staged = false;
+    state.previewPage = null; state.previewTotal = null;
+    el("fileInfo").classList.add("hidden");
+    fileInput.value = "";
+    showPreviewPlaceholder("Wybierz plik, aby zobaczyć podgląd.");
+    if (state.mode === "file") {
+      workspace.classList.add("hidden");
+      el("resultCard").classList.add("hidden");
+    }
+    runBtn.disabled = state.busy || (state.mode === "file" ? !state.path : !state.folder);
+    clearError();
+  }
+
+  function stageFile(file) {
+    setBusy(true, "Przygotowuję plik...");
+    return fetch("/api/stage?name=" + encodeURIComponent(file.name), {
+      method: "POST",
+      headers: { "X-Token": TOKEN, "Content-Type": "application/pdf" },
+      body: file
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (payload) {
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || ("Błąd HTTP " + response.status));
+        }
+        return payload;
+      });
+    }).then(function (info) {
+      setFile({ path: info.path, name: info.name, pages: info.page_count,
+                size: info.size_bytes, staged: true });
+    }).catch(function (error) {
+      resetFile();
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function acceptLocalFile(file) {
+    if (!/\.pdf$/i.test(file.name)) {
+      showError("To nie jest plik PDF. Wybierz dokument z rozszerzeniem .pdf.");
+      return;
+    }
+    clearError();
+    el("fileName").textContent = file.name;
+    el("fileSub").textContent = formatBytes(file.size) + " · przesyłam do podglądu...";
+    el("fileInfo").classList.remove("hidden");
+    stageFile(file);
+  }
+
+  function pickNative() {
+    if (state.busy) return;
+    if (!canPick) { fileInput.click(); return; }
+    clearError();
+    setBusy(true, "Czekam na wybór pliku...");
+    api("/api/pick", {}).then(function (result) {
+      if (result.cancelled) return;
+      if (result.needs_password) throw new Error("Ten PDF jest zabezpieczony hasłem.");
+      setFile({ path: result.path, name: result.name, pages: result.page_count, size: result.size_bytes });
+    }).catch(function (error) {
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  dropzone.addEventListener("click", pickNative);
+  dropzone.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pickNative(); }
+  });
+  el("changeBtn").addEventListener("click", function () { resetFile(); pickNative(); });
+
+  fileInput.addEventListener("change", function () {
+    var file = fileInput.files && fileInput.files[0];
+    if (file) acceptLocalFile(file);
+  });
+
+  ["dragenter", "dragover"].forEach(function (type) {
+    document.addEventListener(type, function (event) {
+      if (!event.dataTransfer || state.busy) return;
+      event.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (type) {
+    document.addEventListener(type, function () { dropzone.classList.remove("dragover"); });
+  });
+  document.addEventListener("drop", function (event) {
+    if (!event.dataTransfer || state.busy) return;
+    event.preventDefault();
+    var file = event.dataTransfer.files && event.dataTransfer.files[0];
+    if (file) {
+      if (state.mode !== "file") setMode("file");
+      acceptLocalFile(file);
+    }
+  });
+
+  // --- folder ---------------------------------------------------------------
+  function setFolder(info) {
+    state.folder = {
+      path: info.path,
+      name: info.name,
+      pdf_count: info.pdf_count,
+      size_bytes: info.size_bytes,
+      preview_path: info.preview_path || null,
+      preview_name: info.preview_name || null
+    };
+    state.previewPage = null;
+    state.previewTotal = null;
+    el("folderInfo").innerHTML = "";
+    var strong = document.createElement("strong");
+    strong.textContent = info.name + " (" + info.path + ")";
+    el("folderInfo").appendChild(strong);
+    el("folderInfo").appendChild(document.createTextNode(
+      " · " + info.pdf_count + " " + fileWord(info.pdf_count) + " PDF" +
+      (info.size_bytes ? " · " + formatBytes(info.size_bytes) : "")
+    ));
+    if (info.examples && info.examples.length) {
+      el("folderInfo").appendChild(document.createElement("br"));
+      el("folderInfo").appendChild(document.createTextNode(
+        "np. " + info.examples.slice(0, 3).join(", ") + (info.pdf_count > 3 ? " ..." : "")
+      ));    }
+    el("folderPathInput").value = info.path;
+    el("previewSource").textContent = info.preview_name ? "podgląd: " + info.preview_name : "";
+    workspace.classList.remove("hidden");
+    el("resultCard").classList.add("hidden");
+    clearError();
+    updateRunLabel();
+    if (state.mode === "folder") runBtn.disabled = info.pdf_count === 0;
+    schedulePreview(0);
+  }
+
+  function pickFolder() {
+    if (state.busy) return;
+    clearError();
+    setBusy(true, "Czekam na wybór folderu...");
+    api("/api/pick-folder", {}).then(function (result) {
+      if (result.cancelled) return;
+      setFolder(result);
+    }).catch(function (error) {
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function loadFolderPath() {
+    var path = el("folderPathInput").value.trim();
+    if (!path) return;
+    clearError();
+    setBusy(true, "Sprawdzam folder...");
+    api("/api/scan", { path: path, recursive: el("recursive").checked })
+      .then(setFolder)
+      .catch(function (error) { showError(error.message); })
+      .then(function () { setBusy(false); });
+  }
+
+  el("pickFolderBtn").addEventListener("click", pickFolder);
+  el("loadFolderBtn").addEventListener("click", loadFolderPath);
+  el("folderPathInput").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { event.preventDefault(); loadFolderPath(); }
+  });
+  el("recursive").addEventListener("change", function () {
+    scheduleSave();
+    if (state.folder) loadFolderPath();
+  });
+
+  el("modeFile").addEventListener("click", function () {
+    setMode("file");
+    if (state.path) schedulePreview(0);
+  });
+  el("modeFolder").addEventListener("click", function () {
+    setMode("folder");
+    if (state.folder) schedulePreview(0);
+  });
+
+  // --- podgląd --------------------------------------------------------------
+  function previewTarget() {
+    if (state.mode === "folder") return state.folder ? state.folder.preview_path : null;
+    return state.path;
+  }
+
+  function showPreviewPlaceholder(text) {
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+    previewImg.classList.add("hidden");
+    previewImg.removeAttribute("src");
+    previewNote.classList.add("hidden");
+    previewEmpty.textContent = text;
+    previewEmpty.classList.remove("hidden");
+    el("previewMeta").textContent = "—";
+    el("previewPage").textContent = "–";
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+  }
+
+  function schedulePreview(delay) {
+    if (!previewTarget()) return;
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(loadPreview, delay === undefined ? PREVIEW_DEBOUNCE_MS : delay);
+  }
+
+  function loadPreview() {
+    previewTimer = null;
+    if (state.busy) return;
+    var target = previewTarget();
+    if (!target) return;
+
+    var options;
+    try {
+      options = collectOptions();
+    } catch (error) {
+      return;
+    }
+
+    var seq = ++state.previewSeq;
+    previewLoading.classList.remove("hidden");
+    previewEmpty.classList.add("hidden");
+
+    apiBinary("/api/preview", {
+      path: target,
+      options: options,
+      page: state.previewPage
+    }).then(function (result) {
+      if (seq !== state.previewSeq) return;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(result.blob);
+      previewImg.src = previewUrl;
+      previewImg.classList.remove("hidden");
+      previewNote.classList.toggle("hidden", result.headers.get("X-Is-Numbered") === "1");
+      state.previewPage = Number(result.headers.get("X-Preview-Page"));
+      state.previewTotal = Number(result.headers.get("X-Page-Count"));
+      var numbered = Number(result.headers.get("X-Numbered-Pages"));
+      el("previewPage").textContent = state.previewPage + " / " + state.previewTotal;
+      el("previewMeta").textContent = numbered + " " + pageWord(numbered) + " z numerem";
+      prevBtn.disabled = state.previewPage <= 1;
+      nextBtn.disabled = state.previewPage >= state.previewTotal;
+    }).catch(function (error) {
+      if (seq !== state.previewSeq) return;
+      showPreviewPlaceholder(error.message);
+    }).then(function () {
+      if (seq === state.previewSeq) previewLoading.classList.add("hidden");
+    });
+  }
+
+  function movePage(delta) {
+    if (!state.previewTotal) return;
+    var target = (state.previewPage || 1) + delta;
+    if (target < 1 || target > state.previewTotal) return;
+    state.previewPage = target;
+    schedulePreview(0);
+  }
+
+  prevBtn.addEventListener("click", function () { movePage(-1); });
+  nextBtn.addEventListener("click", function () { movePage(1); });
+
+  // --- numerowanie ----------------------------------------------------------
+  function updatePreviewExample() {
+    var template = el("template").value || "{n}";
+    var first = Math.max(0, Math.round(numeric("startAt", 1)));
+    var pages = state.pages || 12;
+    var skip = Math.max(0, Math.round(numeric("skipFirst", 0)));
+    var total = first + Math.max(pages - skip, 1) - 1;
+    el("templatePreview").textContent = template
+      .replace(/\{n\}/g, String(first))
+      .replace(/\{total\}/g, String(total));
+  }
+
+  function setBusy(busy, text) {
+    state.busy = busy;
+    dropzone.classList.toggle("busy", busy);
+    el("progress").classList.toggle("hidden", !busy);
+    if (text) el("progressText").textContent = text;
+    document.querySelectorAll("button").forEach(function (button) {
+      if (button !== runBtn) button.disabled = busy;
+    });
+    var ready = state.mode === "file" ? !!state.path : (!!state.folder && state.folder.pdf_count > 0);
+    runBtn.disabled = busy || !ready;
+    prevBtn.disabled = busy || !state.previewTotal || (state.previewPage || 1) <= 1;
+    nextBtn.disabled = busy || !state.previewTotal || state.previewPage >= state.previewTotal;
+  }
+
+  function run() {
+    if (state.busy) return;
+    if (state.mode === "folder") return runFolder();
+
+    if (!state.path) return;
+    clearError();
+    el("resultCard").classList.add("hidden");
+
+    var options = collectOptions();
+    if (options.template.indexOf("{n") === -1) {
+      showError("Format numeru musi zawierać znacznik {n}, np. „{n} / {total}”.");
+      return;
+    }
+
+    setBusy(true, "Numeruję strony...");
+    api("/api/number", { path: state.path, options: options })
+      .then(function (result) {
+        if (result.staged) return downloadResult(result);
+        return result;
+      })
+      .then(function (result) {
+        showResult(result);
+      })
+      .catch(function (error) {
+        showError(error.message);
+      })
+      .then(function () {
+        setBusy(false);
+        schedulePreview(0);
+      });
+  }
+
+  function runFolder() {
+    if (!state.folder) return;
+    clearError();
+    el("resultCard").classList.add("hidden");
+
+    var options = collectOptions();
+    if (options.template.indexOf("{n}") === -1) {
+      showError("Format numeru musi zawierać znacznik {n}, np. „{n} / {total}”.");
+      return;
+    }
+
+    setBusy(true, "Numeruję pliki w folderze...");
+    api("/api/folder-number", {
+      path: state.folder.path,
+      options: options,
+      recursive: el("recursive").checked
+    }).then(function (result) {
+      showFolderResult(result);
+    }).catch(function (error) {
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function downloadResult(result) {
+    return apiBinary("/api/download", { path: result.output }).then(function (binary) {
+      downloadBlob(binary.blob, result.output_name);
+      result.uploaded = true;
+      return result;
+    });
+  }
+
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = name;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function resetResult() {
+    el("resultList").classList.add("hidden");
+    el("resultList").innerHTML = "";
+    el("resultWarnings").classList.add("hidden");
+    el("resultWarnings").innerHTML = "";
+    el("resultIcon").classList.remove("warn");
+  }
+
+  function showResult(result) {
+    resetResult();
+    state.lastResult = result;
+    if (result.page_count) { state.pages = result.page_count; updateFileSub(); }
+    el("resultCard").classList.remove("hidden");
+    if (result.uploaded) {
+      el("resultTitle").textContent = "Gotowe — plik pobrany";
+      el("resultSub").textContent = "Ponumerowano " + result.pages_numbered + " " +
+        pageWord(result.pages_numbered) + ". Plik zapisano w folderze Pobrane (przeglądarka " +
+        "nie pozwala zapisać go obok oryginału).";
+      el("resultPath").textContent = result.output_name;
+      el("revealBtn").classList.add("hidden");
+      el("openBtn").classList.add("hidden");
+    } else {
+      var appendix = result.appendix_pages
+        ? " (w tym dodatek: " + result.appendix_pages + " " + pageWord(result.appendix_pages) + ")"
+        : "";
+      el("resultTitle").textContent = "Gotowe";
+      el("resultSub").textContent = "Ponumerowano " + result.pages_numbered + " z " +
+        result.page_count + " stron" + appendix + ".";
+      el("resultPath").textContent = result.output;
+      el("revealBtn").classList.remove("hidden");
+      el("openBtn").classList.remove("hidden");
+    }
+    var warnings = result.warnings || [];
+    var list = el("resultWarnings");
+    warnings.forEach(function (text) {
+      var item = document.createElement("li");
+      item.textContent = text;
+      list.appendChild(item);
+    });
+    list.classList.toggle("hidden", warnings.length === 0);
+    el("resultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function showFolderResult(result) {
+    resetResult();
+    state.lastResult = { output: result.folder };
+    el("resultCard").classList.remove("hidden");
+    el("resultIcon").classList.toggle("warn", result.errors > 0);
+    el("resultTitle").textContent = result.errors ? "Gotowe z uwagami" : "Gotowe";
+    el("resultSub").textContent = "Ponumerowano " + result.numbered + " z " + result.found +
+      " plików" + (result.errors ? ", " + result.errors + " nie udało się." : ".");
+    el("resultPath").textContent = result.folder;
+    el("revealBtn").classList.remove("hidden");
+    el("openBtn").classList.add("hidden");
+
+    var list = el("resultList");
+    list.innerHTML = "";
+    result.done.forEach(function (entry) {
+      var item = document.createElement("li");
+      var name = document.createElement("span");
+      name.className = "name";
+      name.textContent = entry.name;
+      var out = document.createElement("span");
+      out.className = "out";
+      out.textContent = "→ " + entry.output;
+      item.appendChild(name);
+      item.appendChild(out);
+      list.appendChild(item);
+    });
+    result.failed.forEach(function (entry) {
+      var item = document.createElement("li");
+      item.className = "error";
+      var name = document.createElement("span");
+      name.className = "name";
+      name.textContent = entry.name;
+      var out = document.createElement("span");
+      out.className = "out";
+      out.textContent = entry.error;
+      item.appendChild(name);
+      item.appendChild(out);
+      list.appendChild(item);
+    });
+    list.classList.toggle("hidden", result.done.length + result.failed.length === 0);
+    el("resultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    updateRunLabel();
+  }
+
+  runBtn.addEventListener("click", run);
+  el("againBtn").addEventListener("click", function () { resetFile(); pickNative(); });
+
+  el("revealBtn").addEventListener("click", function () {
+    if (!state.lastResult || !state.lastResult.output) return;
+    api("/api/reveal", { path: state.lastResult.output }).catch(function (e) { showError(e.message); });
+  });
+  el("openBtn").addEventListener("click", function () {
+    if (!state.lastResult || !state.lastResult.output) return;
+    api("/api/open", { path: state.lastResult.output }).catch(function (e) { showError(e.message); });
+  });
+
+  el("quitBtn").addEventListener("click", function () {
+    if (!confirm("Zamknąć program? Serwer lokalny zostanie zatrzymany.")) return;
+    api("/api/quit", {}).catch(function () {}).then(function () {
+      document.body.innerHTML = "<main style='text-align:center;padding-top:80px'>" +
+        "<h1>Program zamknięty</h1><p style='color:#6b7280'>Możesz zamknąć tę kartę przeglądarki.</p></main>";
+    });
+  });
+
+  // --- reakcje na zmiany ----------------------------------------------------
+  function updateOpacityLabel() {
+    el("opacityValue").textContent = Math.round(numeric("opacity", 1) * 100) + "%";
+  }
+
+  el("templateChips").addEventListener("click", function (event) {
+    var button = event.target.closest("button[data-template]");
+    if (!button) return;
+    el("template").value = button.dataset.template;
+    updatePreviewExample();
+    schedulePreview();
+    scheduleSave();
+  });
+
+  ["template", "startAt", "skipFirst", "pages", "fontSize", "margin", "color", "background",
+   "style", "appendixFrom", "appendixStyle", "maskExisting", "maskWidth", "maskHeight", "suffix"]
+    .forEach(function (id) {
+      el(id).addEventListener("input", function () {
+        updatePreviewExample();
+        if (id === "template") {
+          if (el("template").value.indexOf("{n") === -1) {
+            showError("Format numeru musi zawierać znacznik {n}.");
+          } else {
+            clearError();
+          }
+        }
+        schedulePreview();
+        scheduleSave();
+      });
+      el(id).addEventListener("change", scheduleSave);
+    });
+
+  el("opacity").addEventListener("input", function () {
+    updateOpacityLabel();
+    schedulePreview();
+    scheduleSave();
+  });
+
+  document.querySelectorAll('input[name="pos"]').forEach(function (radio) {
+    radio.addEventListener("change", function () { schedulePreview(); scheduleSave(); });
+  });
+
+  el("resetOptions").addEventListener("click", resetOptions);
+
+  document.addEventListener("keydown", function (event) {
+    var target = event.target;
+    if (event.key !== "Enter") return;
+    if (target && (target.tagName === "BUTTON" || target.tagName === "SUMMARY")) return;
+    if (workspace.classList.contains("hidden")) return;
+    event.preventDefault();
+    run();
+  });
+
+  // --- start ----------------------------------------------------------------
+  updateOpacityLabel();
+  applyStoredOptions();
+  updatePreviewExample();
+  setMode("file");
+
+  fetch("/api/health").then(function (r) { return r.json(); }).then(function (info) {
+    canPick = !!info.can_pick;
+    if (!canPick) {
+      el("dzTitle").textContent = "Wybierz plik PDF";
+      el("dzSub").textContent = "albo przeciągnij go tutaj";
+    }
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>
