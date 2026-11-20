@@ -58,6 +58,7 @@ class PreviewImage:
     page_count: int
     numbered_pages: int
     is_numbered: bool
+    label: str | None = None  # dokładny tekst numeru na tej stronie
 
 
 @dataclass
@@ -264,6 +265,7 @@ def render_preview(
             page_count=total_pages,
             numbered_pages=plan.total,
             is_numbered=label is not None,
+            label=label,
         )
     finally:
         doc.close()

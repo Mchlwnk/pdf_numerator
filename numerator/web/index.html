@@ -238,6 +238,18 @@
     gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted);
   }
   .preview-nav .pages { font-variant-numeric: tabular-nums; }
+  .preview-label { margin-top: 12px; }
+  .preview-label .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); margin-bottom: 5px; font-weight: 600;
+  }
+  #previewLabel {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px;
+    background: #f7f8fc; text-align: center; color: var(--ink); cursor: text;
+  }
+  #previewLabel:focus {
+    border-color: var(--line); box-shadow: none; background: #fff;
+  }
   footer {
     padding: 16px 24px; text-align: center; color: var(--muted); font-size: 12.5px;
     border-top: 1px solid var(--line);
@@ -466,6 +478,12 @@
         <button class="icon-btn" id="prevPage" aria-label="Poprzednia strona" disabled>‹</button>
         <span class="pages" id="previewPage">–</span>
         <button class="icon-btn" id="nextPage" aria-label="Następna strona" disabled>›</button>
+      </div>
+      <div class="preview-label">
+        <label class="label" for="previewLabel">Numer na tej stronie</label>
+        <input type="text" id="previewLabel" readonly spellcheck="false"
+               placeholder="—" aria-live="polite"
+               title="Dokładny tekst, który zostanie wpisany na tej stronie">
       </div>
     </aside>
   </div>
@@ -1012,6 +1030,7 @@
     previewEmpty.classList.remove("hidden");
     el("previewMeta").textContent = "—";
     el("previewPage").textContent = "–";
+    el("previewLabel").value = "";
     prevBtn.disabled = true;
     nextBtn.disabled = true;
   }
@@ -1053,6 +1072,8 @@
       state.previewPage = Number(result.headers.get("X-Preview-Page"));
       state.previewTotal = Number(result.headers.get("X-Page-Count"));
       var numbered = Number(result.headers.get("X-Numbered-Pages"));
+      var label = decodeURIComponent(result.headers.get("X-Preview-Label") || "");
+      el("previewLabel").value = label || "—";
       el("previewPage").textContent = state.previewPage + " / " + state.previewTotal;
       el("previewMeta").textContent = numbered + " " + pageWord(numbered) + " z numerem";
       prevBtn.disabled = state.previewPage <= 1;

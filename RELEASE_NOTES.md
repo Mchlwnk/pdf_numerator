@@ -27,6 +27,9 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
+- **dokładny tekst numeru pod podglądem** — pole pokazuje gotową treść, jaka trafi na
+  oglądaną stronę, z uwzględnieniem szablonu, stylu cyfr, numeracji dodatku i pominiętych
+  stron (np. `Strona iv z xii`), więc przed zapisem widać efekt ustawień dodatkowych,
 - **numeracja naprzemienna** — na stronach parzystych numer przechodzi na przeciwną stronę
   (klasyczny układ do druku dwustronnego); działa też z maskowaniem starego numeru,
 - pakiet wydania z sumą kontrolną SHA-256 i instrukcją uruchomienia.

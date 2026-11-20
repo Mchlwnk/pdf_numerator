@@ -385,6 +385,7 @@ def _make_handler(app: LocalApp):
                     "X-Page-Count": str(preview.page_count),
                     "X-Numbered-Pages": str(preview.numbered_pages),
                     "X-Is-Numbered": "1" if preview.is_numbered else "0",
+                    "X-Preview-Label": quote(preview.label or "", safe=""),
                 },
             )
 

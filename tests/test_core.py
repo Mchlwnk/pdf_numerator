@@ -286,6 +286,15 @@ def main() -> int:
         check("wskazana strona", preview3.page_number == 4, str(preview3.page_number))
         check("szerokość obrazu ograniczona", len(preview.data) > 100)
 
+        styled_preview = render_preview(
+            four, NumberOptions(template="Strona {n} z {total}", appendix_from=3), page_number=3
+        )
+        check("etykieta podgladu z dodatkiem", styled_preview.label == "Strona i z ii",
+              repr(styled_preview.label))
+        skipped_preview = render_preview(four, NumberOptions(skip_first=2), page_number=1)
+        check("brak etykiety na pominiętej stronie", skipped_preview.label is None,
+              repr(skipped_preview.label))
+
         try:
             render_preview(four, NumberOptions(), page_number=99)
             check("nieistniejąca strona podglądu", False, "brak wyjątku")

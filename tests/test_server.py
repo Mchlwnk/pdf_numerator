@@ -237,6 +237,23 @@ def main() -> int:
             check("podglad z maska i stylem",
                   status == 200 and body[:8] == b"\x89PNG\r\n\x1a\n", str(status))
 
+            status, headers, body = call(base + "/api/preview", payload={
+                "path": str(style_src),
+                "options": {"style": "roman", "appendix_from": 3, "appendix_style": "ROMAN"},
+                "page": 3,
+            })
+            check("etykieta numeru w naglowku",
+                  urllib.parse.unquote(headers.get("X-Preview-Label", "")) == "I",
+                  repr(headers.get("X-Preview-Label")))
+
+            status, headers, body = call(base + "/api/preview", payload={
+                "path": str(style_src),
+                "options": {"skip_first": 1},
+                "page": 1,
+            })
+            check("pusta etykieta dla pominiętej strony",
+                  headers.get("X-Preview-Label") == "", repr(headers.get("X-Preview-Label")))
+
             print("[7] wybor pliku bez Tk i 404")
             status, _, body = call(base + "/api/pick", payload={})
             check("pick bez Tk -> 501", status == 501, str(status))
