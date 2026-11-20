@@ -50,6 +50,9 @@ if (-not $gh) {
     exit 1
 }
 
+# gh pisze komunikaty na stderr, a PowerShell 5.1 traktuje je jak błędy przy EAP=Stop.
+$ErrorActionPreference = "Continue"
+
 & gh auth status *> $null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Nie jesteś zalogowany. Uruchom najpierw: gh auth login" -ForegroundColor Yellow
