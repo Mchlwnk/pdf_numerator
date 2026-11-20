@@ -354,6 +354,32 @@ def main() -> int:
             blue_keep = _count_pixels(doc[0], lambda r, g, b: b > 150 and r < 120 and g < 120)
         check("bez maski numer zostaje", blue_keep > 5, f"niebieskich: {blue_keep}")
 
+        print("[15] numeracja naprzemienna")
+        mirror_src = make_pdf(tmp / "lustro.pdf", pages=4, width=300, height=200)
+        mirror_before = snapshot(mirror_src)
+        result = number_pdf(mirror_src, NumberOptions(position="bottom-right", mirror=True, margin=20))
+        with pymupdf.open(result.output_path) as doc:
+            for index, page in enumerate(doc):
+                bbox = added_ink(page, mirror_before[index])
+                center = (bbox[0] + bbox[2]) / 2
+                right = center > page.rect.width * 0.6
+                left = center < page.rect.width * 0.4
+                if index % 2 == 0:
+                    check(f"strona {index + 1} (nieparzysta): prawa strona", right,
+                          f"center={center:.1f}")
+                else:
+                    check(f"strona {index + 1} (parzysta): lewa strona", left,
+                          f"center={center:.1f}")
+
+        result = number_pdf(mirror_src, NumberOptions(position="bottom-center", mirror=True, margin=20))
+        with pymupdf.open(result.output_path) as doc:
+            centers = []
+            for index, page in enumerate(doc):
+                bbox = added_ink(page, mirror_before[index])
+                centers.append((bbox[0] + bbox[2]) / 2)
+            ok_center = all(abs(value - 150) <= 6 for value in centers)
+        check("lustro nie rusza numeru wyśrodkowanego", ok_center, str(centers))
+
     print()
     if failures:
         print(f"NIEPOWODZENIA: {failures}")

@@ -49,6 +49,7 @@ class NumberOptions:
     mask_existing: bool = False  # zamaluj stary numer przed wstawieniem nowego
     mask_width: float = 40.0  # szerokość maski w punktach
     mask_height: float = 14.0  # wysokość maski w punktach
+    mirror: bool = False  # na stronach parzystych numer po przeciwnej stronie
     suffix: str = DEFAULT_SUFFIX
     overwrite: bool = False
 
@@ -121,6 +122,8 @@ class NumberOptions:
 
         if not isinstance(self.mask_existing, bool):
             raise OptionsError("Opcja maskowania musi być wartością logiczną.")
+        if not isinstance(self.mirror, bool):
+            raise OptionsError("Opcja numeracji naprzemiennej musi być wartością logiczną.")
         try:
             mask_width = float(self.mask_width)
             mask_height = float(self.mask_height)

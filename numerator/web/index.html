@@ -311,6 +311,10 @@
       <div class="field">
         <span class="label">Pozycja numeru</span>
         <div class="pos-grid" id="posGrid" role="radiogroup" aria-label="Pozycja numeru"></div>
+        <label class="checkline" style="margin-top:10px">
+          <input type="checkbox" id="mirror">
+          <span>numeracja naprzemienna - na stronach parzystych numer po przeciwnej stronie (lewa ↔ prawa)</span>
+        </label>
       </div>
 
       <div class="field">
@@ -651,6 +655,7 @@
       mask_existing: el("maskExisting").checked,
       mask_width: clamp(numeric("maskWidth", 14), 2, 200) * MM_TO_PT,
       mask_height: clamp(numeric("maskHeight", 5), 2, 200) * MM_TO_PT,
+      mirror: el("mirror").checked,
       suffix: el("suffix").value,
       overwrite: false
     };
@@ -676,6 +681,7 @@
       maskExisting: el("maskExisting").checked,
       maskWidth: el("maskWidth").value,
       maskHeight: el("maskHeight").value,
+      mirror: el("mirror").checked,
       suffix: el("suffix").value,
       recursive: el("recursive").checked
     };
@@ -725,6 +731,7 @@
     setValue("maskExisting", data.maskExisting);
     setValue("maskWidth", data.maskWidth);
     setValue("maskHeight", data.maskHeight);
+    setValue("mirror", data.mirror);
     setValue("suffix", data.suffix);
     setValue("recursive", data.recursive);
     updateOpacityLabel();
@@ -748,6 +755,7 @@
     el("maskExisting").checked = false;
     el("maskWidth").value = "14";
     el("maskHeight").value = "5";
+    el("mirror").checked = false;
     el("suffix").value = "_numerowany";
     updateOpacityLabel();
     updatePreviewExample();
@@ -1292,7 +1300,8 @@
   });
 
   ["template", "startAt", "skipFirst", "pages", "fontSize", "margin", "color", "background",
-   "style", "appendixFrom", "appendixStyle", "maskExisting", "maskWidth", "maskHeight", "suffix"]
+   "style", "appendixFrom", "appendixStyle", "maskExisting", "maskWidth", "maskHeight",
+   "mirror", "suffix"]
     .forEach(function (id) {
       el(id).addEventListener("input", function () {
         updatePreviewExample();

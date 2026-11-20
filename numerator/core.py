@@ -196,7 +196,7 @@ def number_pdf(
         font_shrunk = False
 
         for page_index, label in plan.labels.items():
-            shrunk = _draw_number(doc[page_index], label, options, renderer)
+            shrunk = _draw_number(doc[page_index], label, options, renderer, page_index + 1)
             font_shrunk = font_shrunk or shrunk
 
         _save_atomically(doc, output_path)
@@ -247,7 +247,7 @@ def render_preview(
                 color=tuple(options.color),
                 opacity=options.opacity,
             )
-            _draw_number(doc[target], label, options, renderer)
+            _draw_number(doc[target], label, options, renderer, target + 1)
 
         page = doc[target]
         zoom = min(
@@ -274,6 +274,7 @@ def _draw_number(
     label: str,
     options: NumberOptions,
     renderer: TextRenderer,
+    page_number: int = 1,
 ) -> bool:
     """Rysuje numer na stronie. Zwraca True, jeśli trzeba było zmniejszyć czcionkę."""
     visible = page.rect
@@ -289,6 +290,9 @@ def _draw_number(
         shrank = True
 
     horizontal, vertical = POSITIONS[options.position]
+    if options.mirror and page_number % 2 == 0:
+        # Strony parzyste dostają numer po przeciwnej stronie (lewa <-> prawa).
+        horizontal = {"left": "right", "right": "left", "center": "center"}[horizontal]
     if horizontal == "left":
         x = margin
     elif horizontal == "right":

@@ -12,6 +12,7 @@ opuszcza komputera.
 - **tryb folderu** - numeruje wszystkie PDF-y w katalogu (opcjonalnie z podfolderami) i pokazuje raport,
 - **style cyfr** - arabskie, rzymskie (`i, ii, III`) i litery (`a, b`), także **osobna numeracja dodatku** (np. treść 1–20, dodatek i–v),
 - **maskowanie starego numeru** - biały prostokąt w miejscu nowego numeru (skany, dokumenty z wydrukowaną numeracją),
+- **numeracja naprzemienna** - na stronach parzystych numer przechodzi na przeciwną stronę (klasyczny układ do druku dwustronnego),
 - **kolor, krycie i tło** pod numerem (czytelność na skanach i grafikach),
 - **presety** - ustawienia są pamiętane między uruchomieniami,
 - zapisuje **kopię** obok oryginału jako `nazwa_numerowany.pdf` — oryginał zostaje nietknięty,
@@ -38,6 +39,7 @@ python launcher.py "raport.pdf" --pages "2-10,15-" --start 5 --font-size 9
 python launcher.py "raport.pdf" --template "Strona {n} z {total}" --color "#c0392b" --background
 python launcher.py "raport.pdf" --style roman --appendix-from 12 --appendix-style ROMAN
 python launcher.py "raport.pdf" --mask --mask-width 16 --mask-height 6
+python launcher.py "raport.pdf" --position bottom-right --mirror
 python launcher.py --folder "C:\dokumenty\umowy" --recursive --template "{n} / {total}"
 python launcher.py "raport.pdf" --quiet   # bez okien, tylko kod wyjścia (np. do harmonogramu zadań)
 ```
@@ -53,11 +55,31 @@ Dwa tryby pracy (przełącznik u góry):
   Pliki utworzone wcześniej przez program (końcówka `_numerowany`) są pomijane,
   a błąd jednego pliku nie przerywa reszty.
 
-Opcje: pozycja numeru (siatka 3×3), format (`{n}`, `{n} / {total}`, `Strona {n} z {total}`),
-styl cyfr, dodatek od wskazanej strony, zakresy stron, pominięcie pierwszych stron,
-pierwszy numer, rozmiar czcionki, margines, kolor, krycie, tło pod numerem,
-maskowanie starego numeru, końcówka nazwy pliku. Ustawienia są pamiętane w przeglądarce
-(localStorage) — „Przywróć domyślne" czyści je.
+Opcje: pozycja numeru (siatka 3×3), numeracja naprzemienna, format (`{n}`, `{n} / {total}`,
+`Strona {n} z {total}`), styl cyfr, dodatek od wskazanej strony, zakresy stron,
+pominięcie pierwszych stron, pierwszy numer, rozmiar czcionki, margines, kolor, krycie,
+tło pod numerem, maskowanie starego numeru, końcówka nazwy pliku. Ustawienia są pamiętane
+w przeglądarce (localStorage) — „Przywróć domyślne" czyści je.
+
+## Pobieranie gotowego programu (Release)
+
+Wydania z plikiem `PDFNumerator.exe` i sumą kontrolną są na
+[stronie Releases](https://github.com/Mchlwnk/pdf_numerator/releases).
+
+1. Pobierz `PDFNumerator.exe` (ok. 30 MB, nie wymaga instalacji ani Pythona).
+2. Uruchom plik — otworzy się interfejs w przeglądarce.
+3. Windows może pokazać ostrzeżenie SmartScreen („Nieznany wydawca") przy pierwszym
+   uruchomieniu — to normalne dla niepodpisanych programów; wybierz „Więcej informacji"
+   → „Uruchom mimo to".
+4. Po skończonej pracy kliknij **Zamknij** w prawym górnym rogu strony.
+
+Weryfikacja pliku (PowerShell):
+
+```powershell
+Get-FileHash .\PDFNumerator.exe -Algorithm SHA256
+```
+
+Suma kontrolna jest podana w opisie każdego wydania.
 
 ## Budowanie pliku EXE
 
@@ -120,7 +142,7 @@ python tests\test_server.py
 
 ## Plan rozwoju
 
-- lustrzana numeracja na stronach parzystych/nieparzystych (numer raz z lewej, raz z prawej),
 - własne presety nazwane (np. „umowy", „raporty") zamiast jednego zestawu ustawień,
 - podgląd kilku stron naraz (siatka miniatur),
-- wydania na GitHub Releases z gotowym EXE i sumą SHA-256.
+- numeracja sekcji z wieloma dodatkami (Aneks A, B, ...),
+- podpis cyfrowy EXE (usuwa ostrzeżenie SmartScreen).

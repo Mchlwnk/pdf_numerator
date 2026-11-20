@@ -65,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--appendix-style", default="roman",
                        help="styl numeracji dodatku (domyślnie roman)")
     group.add_argument("--mask", action="store_true", help="zamaluj istniejący numer")
+    group.add_argument("--mirror", action="store_true",
+                       help="na stronach parzystych numer po przeciwnej stronie")
     group.add_argument("--mask-width", type=float, default=14.0, help="szerokość maski w mm")
     group.add_argument("--mask-height", type=float, default=5.0, help="wysokość maski w mm")
     group.add_argument("--color", default="#000000", help="kolor numeru, np. '#c0392b'")
@@ -90,6 +92,7 @@ def options_from_args(args: argparse.Namespace) -> NumberOptions:
         mask_existing=args.mask,
         mask_width=args.mask_width * 72 / 25.4,
         mask_height=args.mask_height * 72 / 25.4,
+        mirror=args.mirror,
         color=parse_hex_color(args.color),
         opacity=args.opacity,
         background=args.background,
