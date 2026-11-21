@@ -1,5 +1,9 @@
 # PDF Numerator
 
+[![Release](https://img.shields.io/github/v/release/Mchlwnk/pdf_numerator?display_name=tag)](https://github.com/Mchlwnk/pdf_numerator/releases)
+[![Licencja](https://img.shields.io/badge/licencja-MIT%20%2B%20AGPL--3.0-blue)](LICENSING.md)
+[![Platforma](https://img.shields.io/badge/platforma-Windows%2010%2F11-lightgrey)](https://github.com/Mchlwnk/pdf_numerator/releases)
+
 Program do automatycznego numerowania stron w plikach PDF. Działa w całości lokalnie:
 uruchamia mały serwer na `127.0.0.1` i otwiera interfejs w przeglądarce. Żaden plik nie
 opuszcza komputera.
