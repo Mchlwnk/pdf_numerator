@@ -1,7 +1,20 @@
 # Licencjonowanie
 
-Projekt jest **wolnym oprogramowaniem**. Ponieważ korzysta z biblioteki PyMuPDF
-(licencja AGPL-3.0), licencje są dwie i warto rozumieć różnicę.
+## W skrócie (dla działu IT)
+
+- Program jest **darmowy**. Można go używać w firmie bez opłat i bez rejestracji.
+- **Kod źródłowy jest publiczny** (repozytorium GitHub) i dołączany do każdego wydania
+  jako `source-<wersja>.zip`, więc wymóg udostępnienia źródeł jest spełniony.
+- Kod autorski: **MIT** (użycie, zmiany, publikacja — także komercyjna).
+- Całość zawiera bibliotekę **PyMuPDF** na licencji **AGPL-3.0**, dlatego program jako
+  całość jest udostępniany na AGPL-3.0.
+- **Brak gwarancji** — program dostarczany jest „tak jak jest" (AS IS).
+- Program **nie wymaga instalacji, uprawnień administratora ani dostępu do internetu**;
+  pliki PDF są przetwarzane wyłącznie lokalnie.
+
+Praktyczny wniosek: używanie programu w firmie (także przez kilka osób) jest dozwolone.
+Nie ma opłat licencyjnych ani obowiązku zgłaszania czegokolwiek, o ile źródła pozostają
+dostępne — a są, publicznie i w każdym wydaniu.
 
 ## Kod autorski — MIT
 
