@@ -116,10 +116,17 @@ numerator/
   web/index.html
 hooks/
   hook-pymupdf.py  # wycina z paczki EXE modele ONNX i nagłówki (173 MB -> 30 MB)
+LICENSES/
+  DejaVu-Fonts.txt # licencja osadzonej czcionki
 tests/
   test_core.py     # rdzeń: pozycje, obroty, zakresy, style, dodatek, maska, podgląd
   test_server.py   # API: token, staging, podgląd, folder, pobieranie
   test_dialogs.py  # okna podsumowania i błędów w trybie "przeciągnij na EXE"
+build.ps1          # buduje dist\PDFNumerator.exe
+sign.ps1           # podpis Authenticode (-Pfx / -Thumbprint / -VerifyOnly)
+release.ps1        # wydanie na GitHubie + source.zip (AGPL)
+LICENSE            # licencja MIT dla kodu
+THIRD-PARTY-NOTICES.md
 ```
 
 Testy:
@@ -131,13 +138,83 @@ python tests\test_dialogs.py
 ```
 
 ## Rozwiązywanie problemów
-
 - **Okno z błędem po przeciągnięciu pliku na EXE** — zajrzyj do logu
   `%LOCALAPPDATA%\PDFNumerator\logs\pdf-numerator.log`; program zapisuje tam pełny ślad błędu.
 - **Numer wygląda jak puste prostokąty** — użyj aktualnej wersji (od 0.4.2 program nie
   przycina czcionek dokumentu, co powodowało ten efekt).
 - **Brak numeru na niektórych stronach** — sprawdź „Zakresy stron", „Pomiń pierwsze strony"
   i „Dodatek od strony"; pole pod podglądem pokazuje dokładnie, co trafi na stronę.
+
+## Podpis cyfrowy i użycie w firmie
+
+### Co daje podpis, a czego nie daje
+
+**Daje:** nazwę wydawcy zamiast „Nieznany wydawca", możliwość sprawdzenia, że pliku nikt
+nie zmienił (hash w podpisie) oraz mniej ostrzeżeń SmartScreen.
+
+**Nie daje:** uprawnień administratora, obejścia firmowych polityk (AppLocker / WDAC /
+Defender Application Control) ani gwarancji, że antywirus nie zgłosi fałszywego alarmu.
+
+Program **nie potrzebuje administratora** ani instalacji: to jeden plik EXE, który zapisuje
+wyniki obok PDF-a i logi w `%LOCALAPPDATA%`. Nie instaluje usług, sterowników ani nie
+wymaga UAC.
+
+### Opcje podpisu (ceny orientacyjne, 2026)
+
+| Opcja | Koszt | Kto może | Uwagi |
+|---|---|---|---|
+| **Azure Artifact Signing** (dawniej Trusted Signing) | ~9,99 USD/mies. | organizacje (US/CA/UE), indywidualni w podglądzie | klucz w chmurze Microsoftu, bez tokena, dobre relacje ze SmartScreen |
+| **Certum Cloud Code Signing** | ~100–180 USD/rok | osoby fizyczne i firmy | klucz w chmurze (SimplySign), bez tokena USB |
+| OV Code Signing (inni wystawcy) | 99–300 USD/rok | firmy, osoby | wymaga weryfikacji tożsamości; często token/HSM |
+| EV Code Signing | 300–900 USD/rok | firmy | natychmiastowa reputacja, token sprzętowy |
+| **SignPath Foundation** | bezpłatnie | projekty open source (publiczne repo) | certyfikat OV Fundacji |
+| Self-signed | bezpłatnie | testy / firma wewnętrzna | zaufany tylko tam, gdzie administrator wgra certyfikat |
+
+**Dla programu używanego przez jedną osobę w pracy** najprostsze i sensowne warianty to:
+1. **bez podpisu** + zgoda działu IT na uruchomienie pliku (najczęściej wystarcza),
+2. **Certum Cloud** lub **Azure Artifact Signing** — jeśli ma zniknąć „Nieznany wydawca",
+3. **self-signed + certyfikat wgrany przez IT** — gdy firma ma własny magazyn zaufanych
+   wydawców (bez kosztów, ale wymaga administratora po stronie IT).
+
+### Podpisywanie w tym projekcie
+
+```powershell
+# certyfikat z pliku .pfx (np. wyeksportowany z tokena/cloud)
+.\sign.ps1 -Pfx cert.pfx -PfxPassword "haslo"
+
+# certyfikat z magazynu Windows (tak działa Certum SimplySign i inne chmury)
+.\sign.ps1 -Thumbprint 0123456789ABCDEF...
+
+# sprawdzenie podpisu
+.\sign.ps1 -VerifyOnly
+
+# podpisanie i publikacja w jednym kroku
+.\release.ps1 -Sign
+```
+
+Parametry można też podać przez zmienne środowiskowe: `PDFN_SIGN_PFX`,
+`PDFN_SIGN_PASSWORD`, `PDFN_SIGN_THUMBPRINT`. Skrypt dodaje znacznik czasu (DigiCert),
+więc podpis pozostaje ważny po wygaśnięciu certyfikatu.
+
+### Gdy w firmie nie ma uprawnień administratora
+
+1. Program działa bez instalacji — wystarczy skopiować EXE i uruchomić.
+2. Jeśli polityka blokuje nieznane pliki, **dział IT** może dopuścić aplikację po
+   SHA-256 lub ścieżce. Przekaż im: plik EXE, sumę SHA-256 z opisu wydania, link do
+   repozytorium i informację, że program nie łączy się z internetem.
+3. SmartScreen: „Więcej informacji" → „Uruchom mimo to" (o ile polityka pozwala).
+4. Antywirus: pojedyncze fałszywe alarmy dla PyInstaller-a można zgłosić do Microsoftu
+   (<https://www.microsoft.com/en-us/wdsi/filesubmission>) lub użyć wersji `onedir`.
+
+### Licencje i zgodność
+
+- Kod programu: **MIT** (`LICENSE`).
+- **PyMuPDF jest na AGPL-3.0** — przy przekazywaniu pliku EXE odbiorca musi mieć dostęp
+  do źródeł, dlatego każde wydanie zawiera `source-<wersja>.zip`. Szczegóły i alternatywy:
+  `THIRD-PARTY-NOTICES.md`.
+- Czcionka DejaVu: licencja permissywna, tekst w `LICENSES/DejaVu-Fonts.txt`.
+- Program nie wysyła danych na zewnątrz (tylko `127.0.0.1`), co ułatwia zgodność z RODO
+  w firmie.
 
 ## Bezpieczeństwo
 

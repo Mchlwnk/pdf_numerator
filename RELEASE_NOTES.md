@@ -27,15 +27,17 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
-- **powiększona próbka napisu pod podglądem** — pod polem z tekstem widać sam numer
-  wyrenderowany tą samą czcionką, kolorem i kryciem, na tle dopasowanym do jasności
-  koloru (biały numer na ciemnym tle i odwrotnie), więc przed zapisem widać dokładnie,
-  jak będzie wyglądał,
-- **dokładny tekst numeru** — pole pokazuje gotową treść dla oglądanej strony
-  (szablon, styl cyfr, dodatek, pominięte strony),
-- **numeracja naprzemienna** — na stronach parzystych numer przechodzi na przeciwną stronę,
-- **naprawa: błąd Pythona po przeciągnięciu pliku na EXE** i **puste prostokąty zamiast
-  numeru** (program nie przycina już czcionek dokumentu).
+- **licencje i zgodność** — dodany `LICENSE` (MIT), `THIRD-PARTY-NOTICES.md` (m.in.
+  informacja o AGPL dla PyMuPDF) oraz tekst licencji czcionki DejaVu,
+- **źródła w każdym wydaniu** — do wydania dołączany jest `source-{{VERSION}}.zip`
+  z kodem z tego samego commita (wymóg AGPL przy przekazywaniu programu dalej),
+- **`sign.ps1`** — podpisywanie EXE certyfikatem z pliku `.pfx` lub z magazynu Windows
+  (Certum SimplySign, Azure Artifact Signing) wraz ze znacznikiem czasu i weryfikacją,
+- **`release.ps1 -Sign`** — podpisuje i publikuje w jednym kroku,
+- README: sekcja o podpisie cyfrowym, kosztach certyfikatów i pracy na komputerze
+  bez uprawnień administratora,
+- **powiększona próbka napisu pod podglądem**, dokładny tekst numeru, numeracja
+  naprzemienna.
 
 ## Najważniejsze funkcje
 

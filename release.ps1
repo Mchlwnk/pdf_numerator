@@ -1,16 +1,23 @@
-# Publikuje wydanie na GitHubie: buduje EXE, liczy SHA-256 i tworzy Release.
+# Publikuje wydanie na GitHubie: buduje EXE, opcjonalnie podpisuje, liczy SHA-256,
+# dołącza źródła (wymóg AGPL) i tworzy Release.
 #
 # Wymaga jednorazowego logowania:
 #   gh auth login
 #
 # Użycie:
-#   .\release.ps1              # wersja z numerator\__init__.py
-#   .\release.ps1 -Version 0.4.1
-#   .\release.ps1 -SkipBuild   # użyj istniejącego dist\PDFNumerator.exe
+#   .\release.ps1                        # wersja z numerator\__init__.py
+#   .\release.ps1 -Version 0.4.5
+#   .\release.ps1 -SkipBuild             # użyj istniejącego dist\PDFNumerator.exe
+#   .\release.ps1 -Sign                  # podpisz przed publikacją (sign.ps1)
+#   .\release.ps1 -Sign -SignThumbprint ABC...   # wskaż certyfikat
 
 param(
     [string]$Version = "",
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$Sign,
+    [string]$SignThumbprint = $env:PDFN_SIGN_THUMBPRINT,
+    [string]$SignPfx = $env:PDFN_SIGN_PFX,
+    [string]$SignPfxPassword = $env:PDFN_SIGN_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,10 +37,31 @@ if (-not $SkipBuild) {
 }
 if (-not (Test-Path $exe)) { throw "Brak pliku $exe - uruchom build.ps1" }
 
+if ($Sign) {
+    $signArgs = @("-Exe", $exe)
+    if ($SignPfx) { $signArgs += @("-Pfx", $SignPfx) }
+    if ($SignPfxPassword) { $signArgs += @("-PfxPassword", $SignPfxPassword) }
+    if ($SignThumbprint) { $signArgs += @("-Thumbprint", $SignThumbprint) }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "sign.ps1") @signArgs
+    if ($LASTEXITCODE -ne 0) { throw "Podpisywanie nie powiodło się." }
+}
+
 $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
 $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
 Write-Host "Wersja: $Version  ($sizeMb MB)" -ForegroundColor Cyan
 Write-Host "SHA256: $hash" -ForegroundColor Cyan
+
+# Źródła do wydania (AGPL: odbiorca musi mieć dostęp do kodu).
+$sourceZip = Join-Path $PSScriptRoot "dist\source-$tag.zip"
+$dirty = git status --porcelain
+if ($dirty) {
+    Write-Host "UWAGA: w katalogu są niezacommitowane zmiany - źródła pochodzą z HEAD." -ForegroundColor Yellow
+}
+git archive --format=zip -o $sourceZip HEAD
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
+    throw "Nie udało się utworzyć archiwum źródeł."
+}
+Write-Host "Źródła: $sourceZip" -ForegroundColor Cyan
 
 $notes = Get-Content "RELEASE_NOTES.md" -Raw
 $notes = $notes.Replace("{{VERSION}}", $Version).Replace("{{SHA256}}", $hash).Replace("{{SIZE}}", "$sizeMb")
@@ -61,10 +89,10 @@ if ($LASTEXITCODE -ne 0) {
 
 & gh release view $tag *> $null
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Wydanie $tag już istnieje - podmieniam plik." -ForegroundColor Yellow
-    & gh release upload $tag $exe --clobber
+    Write-Host "Wydanie $tag już istnieje - podmieniam pliki." -ForegroundColor Yellow
+    & gh release upload $tag $exe $sourceZip --clobber
 } else {
-    & gh release create $tag $exe --title "PDF Numerator $Version" --notes-file $notesPath
+    & gh release create $tag $exe $sourceZip --title "PDF Numerator $Version" --notes-file $notesPath
 }
 if ($LASTEXITCODE -ne 0) { throw "Publikacja wydania nie powiodła się." }
 
