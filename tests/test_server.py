@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -165,6 +166,47 @@ def main() -> int:
                                    content_type="application/pdf")
             check("stage odrzuca nie-PDF", status == 400, str(status))
 
+            print("[7] numerowanie folderu w tle (postęp plik po pliku)")
+            job_folder = tmp / "folder-job"
+            job_folder.mkdir()
+            for name in ("j1.pdf", "j2.pdf", "j3.pdf"):
+                make_pdf(job_folder / name, pages=2)
+            (job_folder / "uszkodzony.pdf").write_bytes(b"%PDF-1.4\nzepsuty")
+
+            status, _, body = call(base + "/api/folder-start", payload={
+                "path": str(job_folder), "options": {"template": "{n}"},
+            })
+            job = json.loads(body)["job"]
+            check("start zadania", status == 200 and job["total"] == 4, str(job.get("total")))
+            check("lista plikow w zadaniu",
+                  [entry["name"] for entry in job["files"]] ==
+                  ["j1.pdf", "j2.pdf", "j3.pdf", "uszkodzony.pdf"],
+                  str(job.get("files")))
+            check("stan poczatkowy", job["state"] == "running" and job["processed"] == 0,
+                  str(job["state"]))
+
+            final = job
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                status, _, body = call(base + "/api/folder-status", payload={"id": job["id"]})
+                final = json.loads(body)["job"]
+                if final["state"] != "running":
+                    break
+                time.sleep(0.15)
+
+            check("zadanie zakonczone", final["state"] == "done", str(final["state"]))
+            check("postep 4/4", final["processed"] == 4, str(final["processed"]))
+            check("trzy pliki gotowe", final["summary"]["numbered"] == 3,
+                  str(final["summary"]))
+            check("jeden blad", final["summary"]["errors"] == 1, str(final["summary"]))
+            check("statusy per plik",
+                  [entry["status"] for entry in final["files"]] ==
+                  ["ok", "ok", "ok", "error"], str(final["files"]))
+            check("blad wskazuje plik", final["files"][3]["name"] == "uszkodzony.pdf",
+                  str(final["files"][3]))
+            check("nieznane zadanie", call(base + "/api/folder-status",
+                                           payload={"id": "nie-ma"})[0] == 400)
+
             print("[5] tryb folderu")
             folder = tmp / "folder"
             folder.mkdir()
@@ -182,6 +224,10 @@ def main() -> int:
                   str(scanned.get("pdf_count")))
             check("pomija kopie programu", "c_numerowany.pdf" not in scanned["examples"],
                   str(scanned.get("examples")))
+            check("lista nazw w scanie", scanned["files"] == ["a.pdf", "b.pdf"],
+                  str(scanned.get("files")))
+            check("licznik podfolderow", scanned["subfolder_count"] == 1,
+                  str(scanned.get("subfolder_count")))
             check("podglad z pierwszego pliku", scanned["preview_name"] == "a.pdf",
                   str(scanned.get("preview_name")))
 
@@ -254,7 +300,7 @@ def main() -> int:
             check("pusta etykieta dla pominiętej strony",
                   headers.get("X-Preview-Label") == "", repr(headers.get("X-Preview-Label")))
 
-            print("[7] probka napisu")
+            print("[8] probka napisu")
             status, headers, body = call(base + "/api/label-sample", payload={
                 "path": str(style_src),
                 "options": {"style": "roman", "template": "Strona {n} z {total}"},
@@ -270,13 +316,13 @@ def main() -> int:
             })
             check("probka dla pominiętej strony to blad", status == 400, str(status))
 
-            print("[7] wybor pliku bez Tk i 404")
+            print("[9] wybor pliku bez Tk i 404")
             status, _, body = call(base + "/api/pick", payload={})
             check("pick bez Tk -> 501", status == 501, str(status))
             status, _, body = call(base + "/api/nieznany", payload={})
             check("nieznany endpoint", status == 404, str(status))
 
-            print("[8] zamkniecie")
+            print("[10] zamkniecie")
             status, _, body = call(base + "/api/quit", payload={})
             check("quit ok", status == 200 and json.loads(body)["ok"] is True)
         finally:

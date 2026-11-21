@@ -24,6 +24,7 @@ from numerator import (  # noqa: E402
     to_alpha,
     to_roman,
 )
+from numerator.batch import number_folder  # noqa: E402
 
 
 def make_pdf(path: Path, pages: int = 3, width: float = 300, height: float = 200,
@@ -474,6 +475,26 @@ def main() -> int:
             check("probka dla pominiętej strony", False, "brak wyjątku")
         except NumberingError:
             check("probka dla pominiętej strony", True)
+
+        print("[18] numerowanie folderu: zdarzenia i odporność")
+        batch_folder = tmp / "batch-events"
+        batch_folder.mkdir()
+        make_pdf(batch_folder / "a.pdf", pages=1)
+        make_pdf(batch_folder / "b.pdf", pages=1)
+        (batch_folder / "zly.pdf").write_bytes(b"%PDF-1.4\nzepsuty")
+        events: list[dict] = []
+        summary = number_folder(batch_folder, NumberOptions(), on_event=events.append)
+        check("trzy pliki znalezione", summary.found == 3, str(summary.found))
+        check("dwa ponumerowane", len(summary.done) == 2, str(summary.done))
+        check("jeden błąd", len(summary.failed) == 1, str(summary.failed))
+        check("błąd nie zatrzymuje pętli",
+              sum(1 for event in events if event["type"] in ("ok", "error")) == 3,
+              str(events))
+        check("kolejność zdarzeń",
+              [event["index"] for event in events if event["type"] == "start"] == [1, 2, 3],
+              str([event["index"] for event in events if event["type"] == "start"]))
+        check("zdarzenia niosą nazwę pliku",
+              all(event.get("name") for event in events), str(events))
 
     print()
     if failures:

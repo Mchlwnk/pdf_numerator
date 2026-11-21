@@ -6,9 +6,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .core import NumberingError, number_pdf
+from .core import number_pdf
 from .options import NumberOptions
-from .paths import PathError, is_writable_directory
+from .paths import is_writable_directory
 
 MAX_FILES = 1000
 
@@ -84,9 +84,13 @@ def number_folder(
     folder: str | Path,
     options: NumberOptions,
     recursive: bool = False,
-    progress=None,
+    on_event=None,
 ) -> FolderSummary:
-    """Numeruje wszystkie PDF-y w folderze. Błędy pojedynczych plików nie przerywają pracy."""
+    """Numeruje wszystkie PDF-y w folderze. Błędy pojedynczych plików nie przerywają pracy.
+
+    ``on_event`` jest wywoływane po każdym pliku z informacją o postępie:
+    ``{"type": "start"|"ok"|"error", "name", "index", "total", ...}``.
+    """
     root = read_folder(folder, recursive)
     if not is_writable_directory(root):
         raise BatchError(f"Brak prawa zapisu w folderze: {root}")
@@ -101,13 +105,25 @@ def number_folder(
         )
 
     summary = FolderSummary(folder=root, found=len(files))
+    total = len(files)
     for index, path in enumerate(files, start=1):
-        if progress is not None:
-            progress(index, len(files), path)
+        if on_event is not None:
+            on_event({"type": "start", "name": path.name, "index": index, "total": total})
         try:
             result = number_pdf(path, options)
-        except (NumberingError, PathError, OSError) as exc:
-            summary.failed.append({"name": path.name, "error": str(exc)})
+        except Exception as exc:  # noqa: BLE001 - jeden plik nie może zatrzymać folderu
+            message = str(exc) or exc.__class__.__name__
+            summary.failed.append({"name": path.name, "error": message})
+            if on_event is not None:
+                on_event({
+                    "type": "error", "name": path.name, "index": index,
+                    "total": total, "error": message,
+                })
             continue
         summary.done.append({"name": path.name, "output": result.output_path.name})
+        if on_event is not None:
+            on_event({
+                "type": "ok", "name": path.name, "index": index, "total": total,
+                "output": result.output_path.name, "pages": result.pages_numbered,
+            })
     return summary

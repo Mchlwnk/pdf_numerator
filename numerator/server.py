@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -19,7 +20,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__
-from .batch import BatchError, find_pdfs, number_folder, read_folder
+from .batch import MAX_FILES, BatchError, find_pdfs, number_folder, read_folder
 from .core import (
     NumberingError,
     inspect_pdf,
@@ -30,7 +31,7 @@ from .core import (
 from .dialogs import DialogHost, DialogUnavailable
 from .fonts import app_resource_dir
 from .options import NumberOptions, OptionsError
-from .paths import PathError, ensure_pdf_source
+from .paths import PathError, ensure_pdf_source, is_writable_directory
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +73,8 @@ class LocalApp:
         self.last_activity = time.monotonic()
         self._stage_lock = threading.RLock()
         self._stage_dir: Path | None = None
+        self._job_lock = threading.RLock()
+        self._job: dict | None = None
 
     def touch(self) -> None:
         self.last_activity = time.monotonic()
@@ -106,6 +109,99 @@ class LocalApp:
             return path.resolve().is_relative_to(self._stage_dir.resolve())
         except (OSError, ValueError):
             return False
+
+    # -- numerowanie folderu w tle (postęp plik po pliku) ----------------------
+
+    def start_folder_job(self, folder: str | Path, options: NumberOptions,
+                         recursive: bool) -> dict:
+        with self._job_lock:
+            if self._job is not None and self._job.get("state") == "running":
+                raise BatchError(
+                    "Trwa już numerowanie folderu - poczekaj na zakończenie."
+                )
+
+        root = read_folder(folder, recursive)
+        if not is_writable_directory(root):
+            raise BatchError(f"Brak prawa zapisu w folderze: {root}")
+        files = find_pdfs(root, recursive, options.suffix)
+        if not files:
+            raise BatchError("W tym folderze nie ma plików PDF do ponumerowania.")
+        if len(files) > MAX_FILES:
+            raise BatchError(
+                f"W folderze jest {len(files)} plików PDF, a limit to {MAX_FILES}. "
+                "Podziel pracę na mniejsze foldery."
+            )
+
+        job = {
+            "id": secrets.token_hex(8),
+            "state": "running",
+            "folder": str(root),
+            "total": len(files),
+            "processed": 0,
+            "current": None,
+            "files": [{"name": path.name, "status": "pending"} for path in files],
+            "summary": None,
+            "error": None,
+            "started": time.time(),
+        }
+        with self._job_lock:
+            self._job = job
+        threading.Thread(
+            target=self._run_folder_job, args=(job, root, options, recursive),
+            name="folder-job", daemon=True,
+        ).start()
+        log.info("Start numerowania folderu %s (%s plików)", root, len(files))
+        return self._job_snapshot(job)
+
+    def _run_folder_job(self, job: dict, root: Path, options: NumberOptions,
+                        recursive: bool) -> None:
+        def on_event(event: dict) -> None:
+            index = int(event["index"]) - 1
+            with self._job_lock:
+                entries = job["files"]
+                if not 0 <= index < len(entries):
+                    return
+                entry = entries[index]
+                if entry["name"] != event["name"]:
+                    return
+                entry["status"] = "ok" if event["type"] == "ok" else "error"
+                if event["type"] == "ok":
+                    entry["output"] = event.get("output")
+                elif event["type"] == "error":
+                    entry["error"] = event.get("error")
+                job["current"] = event["name"]
+                job["processed"] = index + (1 if event["type"] in ("ok", "error") else 0)
+
+        try:
+            summary = number_folder(root, options, recursive=recursive, on_event=on_event)
+        except BatchError as exc:
+            with self._job_lock:
+                job["state"] = "error"
+                job["error"] = str(exc)
+            return
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Nieoczekiwany błąd numerowania folderu")
+            with self._job_lock:
+                job["state"] = "error"
+                job["error"] = f"Nieoczekiwany błąd: {exc}"
+            return
+
+        with self._job_lock:
+            job["summary"] = summary.as_dict()
+            job["state"] = "done"
+            job["current"] = None
+            job["processed"] = job["total"]
+        log.info("Folder %s: %s", root, summary.describe())
+
+    def _job_snapshot(self, job: dict) -> dict:
+        with self._job_lock:
+            return copy.deepcopy(job)
+
+    def folder_job_status(self, job_id: str) -> dict:
+        with self._job_lock:
+            if self._job is None or self._job.get("id") != job_id:
+                raise BatchError("Nie znaleziono zadania numerowania - uruchom je ponownie.")
+            return copy.deepcopy(self._job)
 
     # -- uruchomienie ---------------------------------------------------------
 
@@ -255,6 +351,10 @@ def _make_handler(app: LocalApp):
                     return self._handle_scan()
                 if parsed.path == "/api/folder-number":
                     return self._handle_folder_number()
+                if parsed.path == "/api/folder-start":
+                    return self._handle_folder_start()
+                if parsed.path == "/api/folder-status":
+                    return self._handle_folder_status()
                 if parsed.path == "/api/inspect":
                     return self._handle_inspect()
                 if parsed.path == "/api/number":
@@ -331,6 +431,20 @@ def _make_handler(app: LocalApp):
             summary = number_folder(folder, options, recursive=bool(data.get("recursive")))
             log.info("Folder %s: %s", folder, summary.describe())
             return self._json(summary.as_dict())
+
+        def _handle_folder_start(self) -> None:
+            data = self._json_body()
+            folder = _require_folder(data)
+            options = NumberOptions.from_dict(data.get("options"))
+            job = app.start_folder_job(folder, options, recursive=bool(data.get("recursive")))
+            return self._json({"ok": True, "job": job})
+
+        def _handle_folder_status(self) -> None:
+            data = self._json_body()
+            job_id = data.get("id")
+            if not isinstance(job_id, str) or not job_id:
+                raise ApiError("Brak identyfikatora zadania.")
+            return self._json({"ok": True, "job": app.folder_job_status(job_id)})
 
         def _handle_number(self) -> None:
             data = self._json_body()
@@ -481,6 +595,12 @@ def _folder_info(folder: Path, recursive: bool) -> dict:
             total += path.stat().st_size
         except OSError:
             continue
+    subfolder_count = 0
+    if not recursive:
+        try:
+            subfolder_count = max(0, len(find_pdfs(folder, True)) - len(files))
+        except (BatchError, OSError):
+            subfolder_count = 0
     return {
         "path": str(folder),
         "name": folder.name or str(folder),
@@ -488,6 +608,9 @@ def _folder_info(folder: Path, recursive: bool) -> dict:
         "size_bytes": total,
         "recursive": recursive,
         "examples": [path.name for path in files[:5]],
+        "files": [path.name for path in files[:300]],
+        "files_truncated": len(files) > 300,
+        "subfolder_count": subfolder_count,
         "preview_path": str(files[0]) if files else None,
         "preview_name": files[0].name if files else None,
     }

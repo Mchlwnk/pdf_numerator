@@ -238,6 +238,24 @@
     gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted);
   }
   .preview-nav .pages { font-variant-numeric: tabular-nums; }
+  .folder-panel { position: sticky; top: 20px; padding: 16px; }
+  .folder-list { max-height: 340px; margin-top: 4px; }
+  .folder-list li { align-items: center; }
+  .folder-list .status {
+    flex: none; font-size: 11.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .folder-list li.ok .status { color: var(--ok); }
+  .folder-list li.running { background: var(--accent-soft); }
+  .folder-hint {
+    margin: 0 0 10px; padding: 8px 10px; border-radius: 8px;
+    background: #fdf6e3; border: 1px solid #f0e2b6; color: var(--warn); font-size: 12px;
+  }
+  .folder-progress {
+    margin-top: 10px; display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--muted);
+  }
+  .folder-progress .bar { flex: 1; }
   .preview-label { margin-top: 12px; }
   .preview-label .label {
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
@@ -475,7 +493,6 @@
         <span>Podgląd</span>
         <span class="preview-meta" id="previewMeta">—</span>
       </div>
-      <div class="preview-source hidden" id="previewSource"></div>
       <div class="preview-frame" id="previewFrame">
         <div class="preview-empty" id="previewEmpty">Wybierz plik, aby zobaczyć podgląd.</div>
         <img id="previewImg" alt="" class="hidden">
@@ -496,6 +513,19 @@
           <img id="labelSampleImg" alt="Podgląd wyglądu numeru">
           <div class="label-sample-caption">Tak wygląda napis (powiększenie)</div>
         </div>
+      </div>
+    </aside>
+
+    <aside class="card folder-panel hidden" id="folderPanel">
+      <div class="preview-head">
+        <span>Pliki w folderze</span>
+        <span class="preview-meta" id="folderPanelMeta">—</span>
+      </div>
+      <div class="folder-hint hidden" id="folderHint"></div>
+      <ul class="filelist folder-list" id="folderList"></ul>
+      <div class="folder-progress hidden" id="folderProgress">
+        <div class="bar"></div>
+        <span id="folderProgressText">—</span>
       </div>
     </aside>
   </div>
@@ -548,6 +578,8 @@
     previewPage: null,
     previewTotal: null,
     previewSeq: 0,
+    jobId: null,
+    jobTimer: null,
     lastResult: null
   };
   var canPick = false;
@@ -803,7 +835,8 @@
     el("modeFolder").setAttribute("aria-selected", mode === "folder" ? "true" : "false");
     el("fileBlock").classList.toggle("hidden", mode !== "file");
     el("folderBlock").classList.toggle("hidden", mode !== "folder");
-    el("previewSource").classList.toggle("hidden", mode !== "folder");
+    el("previewCard").classList.toggle("hidden", mode !== "file");
+    el("folderPanel").classList.toggle("hidden", mode !== "folder");
     el("againBtn").classList.toggle("hidden", mode === "folder");
 
     var ready = mode === "file" ? !!state.path : !!state.folder;
@@ -950,17 +983,72 @@
   });
 
   // --- folder ---------------------------------------------------------------
+  function renderFolderFiles(names, truncated) {
+    var list = el("folderList");
+    list.innerHTML = "";
+    names.forEach(function (name) {
+      var item = document.createElement("li");
+      var label = document.createElement("span");
+      label.className = "name";
+      label.textContent = name;
+      var status = document.createElement("span");
+      status.className = "status";
+      status.textContent = "—";
+      item.appendChild(label);
+      item.appendChild(status);
+      list.appendChild(item);
+    });
+    if (truncated) {
+      var more = document.createElement("li");
+      var text = document.createElement("span");
+      text.className = "name";
+      text.textContent = "…lista skrócona (pokazano pierwsze " + names.length + ")";
+      more.appendChild(text);
+      list.appendChild(more);
+    }
+  }
+
+  function updateFolderRows(job) {
+    var list = el("folderList");
+    job.files.forEach(function (entry, index) {
+      var item = list.children[index];
+      if (!item) return;
+      var status = item.querySelector(".status");
+      item.classList.toggle("ok", entry.status === "ok");
+      item.classList.toggle("error", entry.status === "error");
+      item.classList.toggle("running", job.state === "running" && entry.status === "pending" &&
+        job.current === entry.name);
+      if (entry.status === "ok") {
+        status.textContent = "✓ " + (entry.output || "");
+        item.title = entry.output || "";
+      } else if (entry.status === "error") {
+        status.textContent = "✗ błąd";
+        item.title = entry.error || "";
+      } else {
+        status.textContent = "—";
+      }
+    });
+  }
+
+  function showFolderHint(info) {
+    var hint = el("folderHint");
+    if (!el("recursive").checked && info.subfolder_count > 0) {
+      hint.textContent = "W podfolderach jest jeszcze " + info.subfolder_count + " " +
+        fileWord(info.subfolder_count) + ". Zaznacz „uwzględnij podfoldery”, aby je dodać.";
+      hint.classList.remove("hidden");
+    } else {
+      hint.classList.add("hidden");
+    }
+  }
+
   function setFolder(info) {
     state.folder = {
       path: info.path,
       name: info.name,
       pdf_count: info.pdf_count,
-      size_bytes: info.size_bytes,
-      preview_path: info.preview_path || null,
-      preview_name: info.preview_name || null
+      size_bytes: info.size_bytes
     };
-    state.previewPage = null;
-    state.previewTotal = null;
+    state.jobId = null;
     el("folderInfo").innerHTML = "";
     var strong = document.createElement("strong");
     strong.textContent = info.name + " (" + info.path + ")";
@@ -969,19 +1057,26 @@
       " · " + info.pdf_count + " " + fileWord(info.pdf_count) + " PDF" +
       (info.size_bytes ? " · " + formatBytes(info.size_bytes) : "")
     ));
-    if (info.examples && info.examples.length) {
-      el("folderInfo").appendChild(document.createElement("br"));
-      el("folderInfo").appendChild(document.createTextNode(
-        "np. " + info.examples.slice(0, 3).join(", ") + (info.pdf_count > 3 ? " ..." : "")
-      ));    }
+    el("folderPanelMeta").textContent = info.pdf_count + " " + fileWord(info.pdf_count);
+    renderFolderFiles(info.files || [], info.files_truncated);
+    showFolderHint(info);
+    el("folderProgress").classList.add("hidden");
     el("folderPathInput").value = info.path;
-    el("previewSource").textContent = info.preview_name ? "podgląd: " + info.preview_name : "";
     workspace.classList.remove("hidden");
     el("resultCard").classList.add("hidden");
     clearError();
     updateRunLabel();
     if (state.mode === "folder") runBtn.disabled = info.pdf_count === 0;
-    schedulePreview(0);
+  }
+
+  function applyFolderInfo(info) {
+    if (info.pdf_count === 0 && info.subfolder_count > 0 && !el("recursive").checked) {
+      el("recursive").checked = true;
+      scheduleSave();
+      loadFolderPath();
+      return;
+    }
+    setFolder(info);
   }
 
   function pickFolder() {
@@ -990,7 +1085,7 @@
     setBusy(true, "Czekam na wybór folderu...");
     api("/api/pick-folder", {}).then(function (result) {
       if (result.cancelled) return;
-      setFolder(result);
+      applyFolderInfo(result);
     }).catch(function (error) {
       showError(error.message);
     }).then(function () {
@@ -1004,7 +1099,7 @@
     clearError();
     setBusy(true, "Sprawdzam folder...");
     api("/api/scan", { path: path, recursive: el("recursive").checked })
-      .then(setFolder)
+      .then(applyFolderInfo)
       .catch(function (error) { showError(error.message); })
       .then(function () { setBusy(false); });
   }
@@ -1025,12 +1120,11 @@
   });
   el("modeFolder").addEventListener("click", function () {
     setMode("folder");
-    if (state.folder) schedulePreview(0);
   });
 
   // --- podgląd --------------------------------------------------------------
   function previewTarget() {
-    if (state.mode === "folder") return state.folder ? state.folder.preview_path : null;
+    if (state.mode === "folder") return null;
     return state.path;
   }
 
@@ -1196,7 +1290,7 @@
   }
 
   function runFolder() {
-    if (!state.folder) return;
+    if (!state.folder || state.busy) return;
     clearError();
     el("resultCard").classList.add("hidden");
 
@@ -1206,16 +1300,53 @@
       return;
     }
 
-    setBusy(true, "Numeruję pliki w folderze...");
-    api("/api/folder-number", {
+    setBusy(true, "Przygotowuję listę plików...");
+    api("/api/folder-start", {
       path: state.folder.path,
       options: options,
       recursive: el("recursive").checked
-    }).then(function (result) {
-      showFolderResult(result);
+    }).then(function (payload) {
+      var job = payload.job;
+      state.jobId = job.id;
+      renderFolderFiles(job.files.map(function (entry) { return entry.name; }), false);
+      updateFolderRows(job);
+      el("folderProgress").classList.remove("hidden");
+      el("folderProgressText").textContent = "0 / " + job.total;
+      pollFolderJob();
     }).catch(function (error) {
       showError(error.message);
-    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function pollFolderJob() {
+    if (!state.jobId) return;
+    api("/api/folder-status", { id: state.jobId }).then(function (payload) {
+      var job = payload.job;
+      updateFolderRows(job);
+
+      if (job.state === "running") {
+        el("folderProgressText").textContent = job.processed + " / " + job.total +
+          (job.current ? " · " + job.current : "");
+        el("progressText").textContent = "Numeruję: " + (job.current || "…") +
+          " (" + job.processed + "/" + job.total + ")";
+        state.jobTimer = setTimeout(pollFolderJob, 350);
+        return;
+      }
+
+      state.jobId = null;
+      el("folderProgress").classList.add("hidden");
+      setBusy(false);
+
+      if (job.state === "error") {
+        showError(job.error || "Nie udało się ponumerować folderu.");
+        return;
+      }
+      if (job.summary) showFolderResult(job.summary);
+    }).catch(function (error) {
+      state.jobId = null;
+      el("folderProgress").classList.add("hidden");
+      showError(error.message);
       setBusy(false);
     });
   }
@@ -1293,35 +1424,6 @@
     el("resultPath").textContent = result.folder;
     el("revealBtn").classList.remove("hidden");
     el("openBtn").classList.add("hidden");
-
-    var list = el("resultList");
-    list.innerHTML = "";
-    result.done.forEach(function (entry) {
-      var item = document.createElement("li");
-      var name = document.createElement("span");
-      name.className = "name";
-      name.textContent = entry.name;
-      var out = document.createElement("span");
-      out.className = "out";
-      out.textContent = "→ " + entry.output;
-      item.appendChild(name);
-      item.appendChild(out);
-      list.appendChild(item);
-    });
-    result.failed.forEach(function (entry) {
-      var item = document.createElement("li");
-      item.className = "error";
-      var name = document.createElement("span");
-      name.className = "name";
-      name.textContent = entry.name;
-      var out = document.createElement("span");
-      out.className = "out";
-      out.textContent = entry.error;
-      item.appendChild(name);
-      item.appendChild(out);
-      list.appendChild(item);
-    });
-    list.classList.toggle("hidden", result.done.length + result.failed.length === 0);
     el("resultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
     updateRunLabel();
   }

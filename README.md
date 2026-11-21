@@ -17,6 +17,7 @@ Kod na licencji MIT, całość (z PyMuPDF) na AGPL-3.0 — szczegóły w [LICENS
 - **podgląd na żywo** - miniaturka strony z naniesionym numerem, pole z dokładnym tekstem
   (`Strona iv z xii`) oraz powiększona próbka samego napisu (czcionka, kolor, krycie),
 - **tryb folderu** - numeruje wszystkie PDF-y w katalogu (opcjonalnie z podfolderami),
+  jedne ustawienia dla wszystkich plików, lista z postępem „plik po pliku",
 - **style cyfr** - arabskie, rzymskie (`i, ii, III`) i litery (`a, b`), także **osobna
   numeracja dodatku** (np. treść 1–20, dodatek i–v),
 - **maskowanie starego numeru** - biały prostokąt w miejscu nowego numeru,
@@ -57,10 +58,12 @@ Dwa tryby pracy (przełącznik u góry):
 
 - **Jeden plik** — wybór z dysku lub przeciągnięcie. Wynik zapisywany jest obok oryginału,
   a plik przeciągnięty (bez znanej ścieżki) trafia do folderu **Pobrane**.
-- **Cały folder** — systemowe okno wyboru katalogu (albo ręcznie wpisana ścieżka),
-  opcja „uwzględnij podfoldery", podgląd pierwszego pliku i raport po zakończeniu.
-  Pliki utworzone wcześniej przez program (końcówka `_numerowany`) są pomijane,
-  a błąd jednego pliku nie przerywa reszty.
+- **Cały folder** — systemowe okno wyboru katalogu (albo ręcznie wpisana ścieżka).
+  Jeden zestaw ustawień obowiązuje wszystkie pliki; po prawej widać listę plików
+  ze statusem (✓ gotowe / ✗ błąd) i postęp „3 / 12 · nazwa.pdf". Opcja „uwzględnij
+  podfoldery" podpowiada, gdy w podfolderach są jeszcze pliki PDF. Kopie powstają
+  obok oryginałów (kolejne uruchomienie dodaje `_2`, `_3`...), pliki `*_numerowany`
+  są pomijane, a błąd jednego pliku nie przerywa reszty.
 
 Opcje: pozycja numeru (siatka 3×3), numeracja naprzemienna, format (`{n}`, `{n} / {total}`,
 `Strona {n} z {total}`), styl cyfr, dodatek od wskazanej strony, zakresy stron,
