@@ -20,7 +20,13 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__
 from .batch import BatchError, find_pdfs, number_folder, read_folder
-from .core import NumberingError, inspect_pdf, number_pdf, render_preview
+from .core import (
+    NumberingError,
+    inspect_pdf,
+    number_pdf,
+    render_label_sample,
+    render_preview,
+)
 from .dialogs import DialogHost, DialogUnavailable
 from .fonts import app_resource_dir
 from .options import NumberOptions, OptionsError
@@ -257,6 +263,8 @@ def _make_handler(app: LocalApp):
                     return self._handle_stage(parse_qs(parsed.query))
                 if parsed.path == "/api/preview":
                     return self._handle_preview()
+                if parsed.path == "/api/label-sample":
+                    return self._handle_label_sample()
                 if parsed.path == "/api/download":
                     return self._handle_download()
                 if parsed.path == "/api/reveal":
@@ -348,6 +356,25 @@ def _make_handler(app: LocalApp):
                 "last_number": result.last_number,
                 "warnings": warnings,
             })
+
+        def _handle_label_sample(self) -> None:
+            data = self._json_body()
+            path = _require_path(data)
+            options = NumberOptions.from_dict(data.get("options"))
+            page = data.get("page")
+            try:
+                page_number = int(page) if page not in (None, "") else None
+            except (TypeError, ValueError):
+                raise ApiError("Niepoprawny numer strony podglądu.")
+            image = render_label_sample(path, options, page_number=page_number)
+            self._send(
+                image.data,
+                content_type="image/png",
+                extra={
+                    "X-Preview-Label": quote(image.label or "", safe=""),
+                    "X-Preview-Page": str(image.page_number),
+                },
+            )
 
         def _handle_stage(self, query: dict[str, list[str]]) -> None:
             data = self._body(MAX_UPLOAD_BODY)

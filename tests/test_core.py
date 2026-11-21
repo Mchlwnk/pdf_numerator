@@ -19,6 +19,7 @@ from numerator import (  # noqa: E402
     build_plan,
     number_pdf,
     parse_hex_color,
+    render_label_sample,
     render_preview,
     to_alpha,
     to_roman,
@@ -85,6 +86,23 @@ def _region_bytes(page: pymupdf.Page, rect: tuple[float, float, float, float],
     """Piksele wycinka strony (do porównania „przed/po" bez obszaru numeru)."""
     pix = page.get_pixmap(dpi=dpi, clip=pymupdf.Rect(*rect))
     return bytes(pix.samples)
+
+
+def _png_count(data: bytes, predicate) -> int:
+    """Liczy piksele w obrazie PNG spełniające warunek koloru."""
+    doc = pymupdf.open("png", data)
+    try:
+        pix = doc[0].get_pixmap()
+        samples, stride, channels = pix.samples, pix.stride, pix.n
+        count = 0
+        for y in range(pix.height):
+            for x in range(pix.width):
+                offset = y * stride + x * channels
+                if predicate(samples[offset], samples[offset + 1], samples[offset + 2]):
+                    count += 1
+        return count
+    finally:
+        doc.close()
 
 
 def labels_in_band(page: pymupdf.Page, low: float = 0.65, high: float = 1.0) -> str:
@@ -431,6 +449,31 @@ def main() -> int:
         check("polski szablon zapisany", "Strona 1 z 1 — żąćęłńóśź" in text_pl, repr(text_pl[-60:]))
         check("czcionka Unicode tylko gdy potrzebna",
               any("DejaVu" in name for name in fonts_pl), str(fonts_pl))
+
+        print("[17] probka napisu pod podglądem")
+        sample = render_label_sample(
+            four,
+            NumberOptions(template="Strona {n} z {total}", appendix_from=3),
+            page_number=3,
+        )
+        check("probka to PNG", sample.data[:8] == b"\x89PNG\r\n\x1a\n", repr(sample.data[:8]))
+        check("etykieta probki", sample.label == "Strona i z ii", repr(sample.label))
+        check("probka jest lekka", len(sample.data) < 80_000, str(len(sample.data)))
+        check("probka ma ciemny tekst", _png_count(sample.data, lambda r, g, b: r < 60) > 50,
+              "brak ciemnych pikseli")
+        white_sample = render_label_sample(
+            four, NumberOptions(color=(1.0, 1.0, 1.0), font_size=14), page_number=1
+        )
+        check("jasny napis na ciemnym tle",
+              _png_count(white_sample.data,
+                         lambda r, g, b: r > 200 and g > 200 and b > 200) > 20,
+              "brak jasnych pikseli")
+
+        try:
+            render_label_sample(four, NumberOptions(skip_first=2), page_number=1)
+            check("probka dla pominiętej strony", False, "brak wyjątku")
+        except NumberingError:
+            check("probka dla pominiętej strony", True)
 
     print()
     if failures:

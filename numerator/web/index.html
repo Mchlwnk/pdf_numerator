@@ -250,6 +250,14 @@
   #previewLabel:focus {
     border-color: var(--line); box-shadow: none; background: #fff;
   }
+  .label-sample { margin-top: 8px; text-align: center; }
+  .label-sample img {
+    max-width: 100%; max-height: 96px; display: inline-block;
+    border: 1px solid var(--line); border-radius: 7px; background: #fff;
+  }
+  .label-sample-caption {
+    font-size: 11px; color: var(--muted); margin-top: 5px;
+  }
   footer {
     padding: 16px 24px; text-align: center; color: var(--muted); font-size: 12.5px;
     border-top: 1px solid var(--line);
@@ -484,6 +492,10 @@
         <input type="text" id="previewLabel" readonly spellcheck="false"
                placeholder="—" aria-live="polite"
                title="Dokładny tekst, który zostanie wpisany na tej stronie">
+        <div class="label-sample hidden" id="labelSample">
+          <img id="labelSampleImg" alt="Podgląd wyglądu numeru">
+          <div class="label-sample-caption">Tak wygląda napis (powiększenie)</div>
+        </div>
       </div>
     </aside>
   </div>
@@ -542,6 +554,7 @@
   var previewTimer = null;
   var saveTimer = null;
   var previewUrl = null;
+  var labelSampleUrl = null;
 
   var el = function (id) { return document.getElementById(id); };
   var dropzone = el("dropzone");
@@ -1031,8 +1044,29 @@
     el("previewMeta").textContent = "—";
     el("previewPage").textContent = "–";
     el("previewLabel").value = "";
+    hideLabelSample();
     prevBtn.disabled = true;
     nextBtn.disabled = true;
+  }
+
+  function hideLabelSample() {
+    if (labelSampleUrl) { URL.revokeObjectURL(labelSampleUrl); labelSampleUrl = null; }
+    el("labelSampleImg").removeAttribute("src");
+    el("labelSample").classList.add("hidden");
+  }
+
+  function updateLabelSample(seq, target, options, page) {
+    apiBinary("/api/label-sample", { path: target, options: options, page: page })
+      .then(function (result) {
+        if (seq !== state.previewSeq) return;
+        if (labelSampleUrl) URL.revokeObjectURL(labelSampleUrl);
+        labelSampleUrl = URL.createObjectURL(result.blob);
+        el("labelSampleImg").src = labelSampleUrl;
+        el("labelSample").classList.remove("hidden");
+      })
+      .catch(function () {
+        if (seq === state.previewSeq) hideLabelSample();
+      });
   }
 
   function schedulePreview(delay) {
@@ -1073,7 +1107,13 @@
       state.previewTotal = Number(result.headers.get("X-Page-Count"));
       var numbered = Number(result.headers.get("X-Numbered-Pages"));
       var label = decodeURIComponent(result.headers.get("X-Preview-Label") || "");
+      var isNumbered = result.headers.get("X-Is-Numbered") === "1";
       el("previewLabel").value = label || "—";
+      if (isNumbered) {
+        updateLabelSample(seq, target, options, state.previewPage);
+      } else {
+        hideLabelSample();
+      }
       el("previewPage").textContent = state.previewPage + " / " + state.previewTotal;
       el("previewMeta").textContent = numbered + " " + pageWord(numbered) + " z numerem";
       prevBtn.disabled = state.previewPage <= 1;

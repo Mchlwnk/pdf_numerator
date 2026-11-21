@@ -254,6 +254,22 @@ def main() -> int:
             check("pusta etykieta dla pominiętej strony",
                   headers.get("X-Preview-Label") == "", repr(headers.get("X-Preview-Label")))
 
+            print("[7] probka napisu")
+            status, headers, body = call(base + "/api/label-sample", payload={
+                "path": str(style_src),
+                "options": {"style": "roman", "template": "Strona {n} z {total}"},
+                "page": 2,
+            })
+            check("probka to PNG", status == 200 and body[:8] == b"\x89PNG\r\n\x1a\n", str(status))
+            check("etykieta probki",
+                  urllib.parse.unquote(headers.get("X-Preview-Label", "")) == "Strona ii z iii",
+                  repr(headers.get("X-Preview-Label")))
+
+            status, _, body = call(base + "/api/label-sample", payload={
+                "path": str(style_src), "options": {"skip_first": 1}, "page": 1,
+            })
+            check("probka dla pominiętej strony to blad", status == 400, str(status))
+
             print("[7] wybor pliku bez Tk i 404")
             status, _, body = call(base + "/api/pick", payload={})
             check("pick bez Tk -> 501", status == 501, str(status))

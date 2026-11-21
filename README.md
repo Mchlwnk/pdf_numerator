@@ -8,7 +8,7 @@ opuszcza komputera.
 
 - numeruje wszystkie strony dokumentu (albo wszystkie poza pierwszymi _N_),
 - **zakresy stron** w zapisie jak w drukarce: `1-10,15,20-`,
-- **podgląd na żywo** - miniaturka strony z naniesionym numerem oraz polem z dokładnym tekstem, który się pojawi (np. `Strona iv z xii`),
+- **podgląd na żywo** - miniaturka strony z naniesionym numerem, pole z dokładnym tekstem (`Strona iv z xii`) oraz powiększona próbka samego napisu (czcionka, kolor, krycie),
 - **tryb folderu** - numeruje wszystkie PDF-y w katalogu (opcjonalnie z podfolderami) i pokazuje raport,
 - **style cyfr** - arabskie, rzymskie (`i, ii, III`) i litery (`a, b`), także **osobna numeracja dodatku** (np. treść 1–20, dodatek i–v),
 - **maskowanie starego numeru** - biały prostokąt w miejscu nowego numeru (skany, dokumenty z wydrukowaną numeracją),

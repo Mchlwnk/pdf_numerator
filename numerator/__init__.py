@@ -9,6 +9,7 @@ from .core import (
     build_plan,
     inspect_pdf,
     number_pdf,
+    render_label_sample,
     render_preview,
 )
 from .options import (
@@ -45,10 +46,11 @@ __all__ = [
     "page_indices",
     "parse_hex_color",
     "parse_page_ranges",
+    "render_label_sample",
     "render_preview",
     "resolve_output",
     "to_alpha",
     "to_roman",
 ]
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"

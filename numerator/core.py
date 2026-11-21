@@ -271,6 +271,74 @@ def render_preview(
         doc.close()
 
 
+def render_label_sample(
+    source: str | Path,
+    options: NumberOptions | None = None,
+    page_number: int | None = None,
+    zoom: float = 3.0,
+    max_width: float = 720.0,
+) -> PreviewImage:
+    """Renderuje sam napis numeru (bez strony) - podgląd wyglądu czcionki i koloru."""
+    options = options or NumberOptions()
+    source_path = ensure_pdf_source(Path(source))
+    doc = _open_pdf(source_path)
+    try:
+        total_pages = doc.page_count
+        plan = build_plan(total_pages, options)
+        if page_number is None:
+            target = min(plan.labels)
+        else:
+            target = int(page_number) - 1
+            if not 0 <= target < total_pages:
+                raise NumberingError(
+                    f"Strona {page_number} nie istnieje (dokument ma {total_pages} stron)."
+                )
+        label = plan.labels.get(target)
+        if label is None:
+            raise NumberingError("Ta strona nie będzie numerowana.")
+    finally:
+        doc.close()
+
+    renderer = TextRenderer(
+        font_size=options.font_size,
+        color=tuple(options.color),
+        opacity=options.opacity,
+    )
+    ascent_em, descent_em = renderer.metrics(label)
+    text_width = max(renderer.measure(label), 1.0)
+    text_height = max((ascent_em + descent_em) * options.font_size, 1.0)
+    pad = max(4.0, options.font_size * 0.45)
+
+    sample = pymupdf.open()
+    try:
+        page = sample.new_page(width=text_width + 2 * pad, height=text_height + 2 * pad)
+        # Jasne tło dla ciemnych numerów, ciemniejsze dla jasnych - żeby napis było widać.
+        red, green, blue = (float(channel) for channel in options.color)
+        luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        background = (0.42, 0.45, 0.52) if luminance > 0.75 else (0.97, 0.975, 0.985)
+        page.draw_rect(page.rect, color=None, fill=background, width=0)
+
+        baseline = pad + ascent_em * options.font_size
+        renderer.draw(page, pymupdf.Point(pad, baseline), label)
+
+        scale = min(zoom, max_width / max(page.rect.width, 1.0))
+        scale = max(scale, 0.5)
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+        data = pix.tobytes("png")
+    finally:
+        sample.close()
+
+    return PreviewImage(
+        data=data,
+        page_index=target,
+        page_number=target + 1,
+        page_count=total_pages,
+        numbered_pages=plan.total,
+        is_numbered=True,
+        label=label,
+    )
+
+
 def _draw_number(
     page: pymupdf.Page,
     label: str,
