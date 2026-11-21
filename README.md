@@ -4,6 +4,9 @@ Program do automatycznego numerowania stron w plikach PDF. Działa w całości l
 uruchamia mały serwer na `127.0.0.1` i otwiera interfejs w przeglądarce. Żaden plik nie
 opuszcza komputera.
 
+**Wolne oprogramowanie** — kod na licencji MIT, całość (z PyMuPDF) na AGPL-3.0.
+Szczegóły: [LICENSING.md](LICENSING.md).
+
 ## Co robi
 
 - numeruje wszystkie strony dokumentu (albo wszystkie poza pierwszymi _N_),
@@ -63,12 +66,13 @@ w przeglądarce (localStorage) — „Przywróć domyślne" czyści je.
 
 ## Pobieranie gotowego programu (Release)
 
-Repozytorium jest **prywatne**, więc wydania widzisz tylko po zalogowaniu na swoje konto:
-[strona Releases](https://github.com/Mchlwnk/pdf_numerator/releases) (autor: `Mchlwnk`).
-Jeśli chcesz przekazać program komuś innemu, wyślij mu plik `PDFNumerator.exe` bezpośrednio —
-nie potrzebuje on konta na GitHubie ani Pythona.
+Gotowe wydania są na [stronie Releases](https://github.com/Mchlwnk/pdf_numerator/releases) —
+publicznie, bez logowania. Każde wydanie zawiera:
 
-1. Pobierz `PDFNumerator.exe` (ok. 30 MB, nie wymaga instalacji).
+- `PDFNumerator.exe` (ok. 30 MB, bez instalacji i bez Pythona),
+- `source-<wersja>.zip` — komplet źródeł z tego samego commita.
+
+1. Pobierz `PDFNumerator.exe`.
 2. Uruchom plik — otworzy się interfejs w przeglądarce.
 3. Windows może pokazać ostrzeżenie SmartScreen („Nieznany wydawca") przy pierwszym
    uruchomieniu — to normalne dla niepodpisanych programów; wybierz „Więcej informacji"
@@ -81,8 +85,8 @@ Weryfikacja pliku (PowerShell):
 Get-FileHash .\PDFNumerator.exe -Algorithm SHA256
 ```
 
-Suma kontrolna jest podana w opisie każdego wydania (dla 0.4.0:
-`33BF723AD925A76C704A016D57D89BCDA31FAECEC0CA79653EE30FC50F192F3F`).
+Suma kontrolna jest podana w opisie każdego wydania (dla 0.4.4:
+`8DEBF8A43849E7C7D801C808B7D632FFCCD1122B14B57C656C86B73EB97E7B3F`).
 
 Nowe wydanie publikujesz jedną komendą (wymaga `gh auth login`):
 
@@ -208,13 +212,28 @@ więc podpis pozostaje ważny po wygaśnięciu certyfikatu.
 
 ### Licencje i zgodność
 
-- Kod programu: **MIT** (`LICENSE`).
-- **PyMuPDF jest na AGPL-3.0** — przy przekazywaniu pliku EXE odbiorca musi mieć dostęp
-  do źródeł, dlatego każde wydanie zawiera `source-<wersja>.zip`. Szczegóły i alternatywy:
-  `THIRD-PARTY-NOTICES.md`.
+- Kod programu: **MIT** (`LICENSE`); całość z PyMuPDF: **AGPL-3.0** (`LICENSES/AGPL-3.0.txt`).
+- **Repozytorium jest publiczne**, więc dostęp do źródeł jest stały; dodatkowo każde
+  wydanie zawiera `source-<wersja>.zip` (wymóg AGPL przy przekazywaniu programu dalej).
+- Szczegóły i droga do „czystego MIT": `LICENSING.md`.
 - Czcionka DejaVu: licencja permissywna, tekst w `LICENSES/DejaVu-Fonts.txt`.
 - Program nie wysyła danych na zewnątrz (tylko `127.0.0.1`), co ułatwia zgodność z RODO
   w firmie.
+
+## Licencja
+
+- **Kod autorski — MIT**: używaj, zmieniaj, publikuj, także komercyjnie.
+- **Całość z PyMuPDF — AGPL-3.0**: przy udostępnianiu programu daj dostęp do źródeł
+  (publiczne repo + `source-*.zip` w wydaniach).
+
+Pełne wyjaśnienie i alternatywa (czyste MIT po zamianie PyMuPDF na pypdf + reportlab):
+[LICENSING.md](LICENSING.md).
+
+## Współpraca
+
+Repozytorium jest publiczne — zgłoszenia i propozycje zmian przez
+[Issues](https://github.com/Mchlwnk/pdf_numerator/issues). Projekt jest darmowy;
+nie ma gwarancji i nie zbiera danych.
 
 ## Bezpieczeństwo
 
@@ -242,4 +261,6 @@ więc podpis pozostaje ważny po wygaśnięciu certyfikatu.
 - własne presety nazwane (np. „umowy", „raporty") zamiast jednego zestawu ustawień,
 - podgląd kilku stron naraz (siatka miniatur),
 - numeracja sekcji z wieloma dodatkami (Aneks A, B, ...),
-- podpis cyfrowy EXE (usuwa ostrzeżenie SmartScreen).
+- **darmowe podpisywanie przez [SignPath Foundation](https://signpath.org/)** — projekt
+  open source kwalifikuje się do certyfikatu OV Fundacji (bez kosztów),
+- podpis komercyjny (Azure Artifact Signing / Certum) dla pełnej reputacji SmartScreen.

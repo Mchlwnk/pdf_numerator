@@ -1,6 +1,7 @@
 # Licencje i komponenty zewnętrzne
 
-Projekt jest udostępniany na licencji **MIT** (plik `LICENSE`). Poniżej lista
+Projekt jest udostępniany na licencji **MIT** (plik `LICENSE`), a całość razem z PyMuPDF
+podlega **AGPL-3.0** — pełne wyjaśnienie w [`LICENSING.md`](LICENSING.md). Poniżej lista
 komponentów, z których korzysta program, wraz z ich licencjami.
 
 ## PyMuPDF / MuPDF — **AGPL-3.0** (najważniejsze)
