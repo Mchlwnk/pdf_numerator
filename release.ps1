@@ -53,9 +53,9 @@ Write-Host "SHA256: $hash" -ForegroundColor Cyan
 
 # Źródła do wydania (AGPL: odbiorca musi mieć dostęp do kodu).
 $sourceZip = Join-Path $PSScriptRoot "dist\source-$tag.zip"
-$dirty = git status --porcelain
+$dirty = git status --porcelain --untracked-files=no
 if ($dirty) {
-    Write-Host "UWAGA: w katalogu są niezacommitowane zmiany - źródła pochodzą z HEAD." -ForegroundColor Yellow
+    Write-Host "UWAGA: są niezacommitowane zmiany w plikach - źródła pochodzą z HEAD." -ForegroundColor Yellow
 }
 git archive --format=zip -o $sourceZip HEAD
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip)) {
