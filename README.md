@@ -97,7 +97,8 @@ Weryfikacja pliku (PowerShell):
 Get-FileHash .\PDFNumerator.exe -Algorithm SHA256
 ```
 
-Suma kontrolna jest podana w opisie wydania.
+Suma kontrolna jest podana w opisie wydania (dla 0.5.2:
+`AEE4576C627C645F2B98E2595559D28DB840073BCC3B90EE9783D2C2B0D28DCB`).
 
 ## Budowanie pliku EXE
 
@@ -122,6 +123,7 @@ numerator/
   fonts.py     # czcionki numeru (bazowa PDF + DejaVu Sans dla diakrytyków)
   server.py    # lokalny serwer HTTP na stdlib (bez Flaska), staging plików
   dialogs.py   # natywne okna Windows w wątku Tk
+  instance.py  # jedna instancja programu (zamykanie poprzedniej kopii)
   app.py       # tryb UI, tryb wsadowy, tryb folderu
   web/index.html
 hooks/
@@ -130,9 +132,10 @@ LICENSES/
   AGPL-3.0.txt     # licencja PyMuPDF (całość)
   DejaVu-Fonts.txt # licencja osadzonej czcionki
 tests/
-  test_core.py     # rdzeń: pozycje, obroty, zakresy, style, dodatek, maska, podgląd
-  test_server.py   # API: token, staging, podgląd, folder, pobieranie
+  test_core.py     # rdzeń: pozycje, obroty, zakresy, style, dodatek, maska, podgląd, składanie
+  test_server.py   # API: token, staging, podgląd, folder, składanie, pobieranie
   test_dialogs.py  # okna podsumowania i błędów w trybie "przeciągnij na EXE"
+  test_instance.py # zamykanie poprzedniej kopii programu
 build.ps1          # buduje dist\PDFNumerator.exe
 release.ps1        # wydanie na GitHubie + source.zip
 LICENSE            # licencja MIT dla kodu
@@ -144,6 +147,7 @@ Testy:
 python tests\test_core.py
 python tests\test_server.py
 python tests\test_dialogs.py
+python tests\test_instance.py
 ```
 
 ## Bezpieczeństwo

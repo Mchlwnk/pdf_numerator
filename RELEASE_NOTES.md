@@ -27,14 +27,18 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
-- **nowa wersja zamyka poprzednią kopię programu** — koniec z kilkoma instancjami
-  i starymi kartami w przeglądarce; uruchomienie nowego EXE przełącza na aktualną wersję,
-- **numer wersji w tytule karty i w stopce** — od razu widać, czy patrzysz na aktualną wersję,
-- **numeracja opcjonalna przy składaniu** — checkbox: bez numeracji `_zlozony`, z numeracją
-  `_numerowany`,
-- **osobne miejsce dla każdego pliku** — wstaw po stronie N albo zastąp zakres A–B,
-- **dokument główny można przeciągnąć**, pola wyboru są kompaktowe,
-- **wersja testowa** — stabilna pozostaje 0.4.6.
+- **nowy tryb „Wstaw / zastąp strony"** — składanie dokumentu z kilku PDF-ów: dla każdego
+  pliku wybierasz, po której stronie go wstawić albo jaki zakres stron zastąpić (numery
+  odnoszą się do oryginału),
+- **numeracja po złożeniu jest opcjonalna** — checkbox; bez numeracji powstaje
+  `nazwa_zlozony.pdf`, z numeracją `nazwa_numerowany.pdf`,
+- **dokument główny można przeciągnąć** — nie trzeba wybierać go z dysku,
+- **tryb folderu** — lista plików z postępem „3 / 12" i statusem każdego pliku, odporność
+  na błędy, podpowiedź o plikach w podfolderach,
+- **jedna instancja programu** — uruchomienie nowszej wersji zamyka poprzednią kopię,
+  numer wersji widać w tytule karty i stopce,
+- **poprawki** — brak okna błędu po przeciągnięciu pliku na EXE oraz brak uszkadzania
+  czcionek oryginalnego dokumentu.
 
 ## Najważniejsze funkcje
 
