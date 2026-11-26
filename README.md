@@ -74,6 +74,10 @@ Dwa tryby pracy (przełącznik u góry):
   dostanie numery: z numeracją powstaje `nazwa_numerowany.pdf`, bez niej
   `nazwa_zlozony.pdf`. Oryginał zostaje nietknięty.
 
+Uruchomienie nowej wersji programu **zamyka poprzednią kopię** (jeśli jeszcze działała),
+więc zawsze otwiera się aktualna wersja. Numer wersji widać w tytule karty przeglądarki
+i w stopce strony.
+
 Opcje: pozycja numeru (siatka 3×3), numeracja naprzemienna, format (`{n}`, `{n} / {total}`,
 `Strona {n} z {total}`), styl cyfr, dodatek od wskazanej strony, zakresy stron,
 pominięcie pierwszych stron, pierwszy numer, rozmiar czcionki, margines, kolor, krycie,

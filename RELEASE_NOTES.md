@@ -27,12 +27,13 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
-- **numeracja opcjonalna przy składaniu** — checkbox „numeruj strony po złożeniu":
-  bez numeracji powstaje `nazwa_zlozony.pdf`, z numeracją `nazwa_numerowany.pdf`,
-- **osobne miejsce dla każdego pliku** — każdy PDF można wstawić po innej stronie albo
-  zastąpić nim inny zakres stron; walidacja zakresów i nakładania się,
-- **dokument główny można przeciągnąć** (nie tylko wybrać z dysku),
-- **kompaktowe pola przeciągania** plików,
+- **nowa wersja zamyka poprzednią kopię programu** — koniec z kilkoma instancjami
+  i starymi kartami w przeglądarce; uruchomienie nowego EXE przełącza na aktualną wersję,
+- **numer wersji w tytule karty i w stopce** — od razu widać, czy patrzysz na aktualną wersję,
+- **numeracja opcjonalna przy składaniu** — checkbox: bez numeracji `_zlozony`, z numeracją
+  `_numerowany`,
+- **osobne miejsce dla każdego pliku** — wstaw po stronie N albo zastąp zakres A–B,
+- **dokument główny można przeciągnąć**, pola wyboru są kompaktowe,
 - **wersja testowa** — stabilna pozostaje 0.4.6.
 
 ## Najważniejsze funkcje

@@ -338,6 +338,7 @@ def _make_handler(app: LocalApp):
             if parsed.path == "/api/health":
                 return self._json({
                     "ok": True,
+                    "app": "pdf-numerator",
                     "can_pick": app.dialogs.available,
                     "version": __version__,
                 })

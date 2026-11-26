@@ -20,6 +20,7 @@ from . import __version__
 from .batch import BatchError, number_folder
 from .core import NumberingError, number_pdf
 from .dialogs import DialogHost
+from .instance import clear_instance, stop_previous, write_instance
 from .logsetup import setup_logging
 from .options import NumberOptions, OptionsError, parse_hex_color
 from .paths import PathError
@@ -204,8 +205,12 @@ def run_ui(args: argparse.Namespace) -> int:
     if not args.no_tk:
         dialogs.create()
 
+    if stop_previous():
+        log.info("Zamknięto poprzednią kopię programu")
+
     app = LocalApp(dialogs, token=args.token, preferred_port=args.port)
     url = app.start()
+    write_instance(app.port, app.token)
     safe_print(f"PDF Numerator {__version__} - interfejs: {url}")
     safe_print("Zamknij okno przyciskiem „Zamknij” w przeglądarce lub Ctrl+C tutaj.")
 
@@ -236,6 +241,7 @@ def run_ui(args: argparse.Namespace) -> int:
         log.info("Przerwano z klawiatury")
     finally:
         app.stop()
+        clear_instance()
         dialogs.close()
     return 0
 
