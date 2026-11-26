@@ -12,15 +12,18 @@ import pymupdf
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from numerator import (  # noqa: E402
+    AssembleError,
     NumberOptions,
     NumberingError,
     OptionsError,
     PathError,
+    SpliceOptions,
     build_plan,
     number_pdf,
     parse_hex_color,
     render_label_sample,
     render_preview,
+    splice_pdfs,
     to_alpha,
     to_roman,
 )
@@ -495,6 +498,82 @@ def main() -> int:
               str([event["index"] for event in events if event["type"] == "start"]))
         check("zdarzenia niosą nazwę pliku",
               all(event.get("name") for event in events), str(events))
+
+        print("[19] wstawianie i zastępowanie stron")
+
+        def labeled(path: Path, labels: list[str]) -> Path:
+            doc = pymupdf.open()
+            for text in labels:
+                page = doc.new_page(width=300, height=200)
+                page.insert_text((20, 40), text, fontsize=12)
+            doc.save(path)
+            doc.close()
+            return path
+
+        main_doc = labeled(tmp / "glowny.pdf", ["A1", "A2", "A3", "A4"])
+        extra = labeled(tmp / "dodatek.pdf", ["B1", "B2"])
+        third = labeled(tmp / "trzeci.pdf", ["C1"])
+        main_digest = hashlib.sha256(main_doc.read_bytes()).hexdigest()
+
+        result = splice_pdfs(main_doc, [extra], NumberOptions(),
+                             SpliceOptions(mode="insert", after_page=2))
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+            numbers = [labels_in_band(doc[i]) for i in range(doc.page_count)]
+        check("wstawienie: liczba stron", result.page_count_after == 6, str(result.page_count_after))
+        check("wstawienie: kolejność stron",
+              texts == ["A1", "A2", "B1", "B2", "A3", "A4"], str(texts))
+        check("wstawienie: numeracja ciągła", numbers == ["1", "2", "3", "4", "5", "6"],
+              str(numbers))
+        check("oryginał nietknięty",
+              hashlib.sha256(main_doc.read_bytes()).hexdigest() == main_digest)
+
+        result = splice_pdfs(main_doc, [extra], NumberOptions(),
+                             SpliceOptions(mode="insert", after_page=0))
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+        check("wstawienie na początku", texts[:2] == ["B1", "B2"], str(texts))
+
+        result = splice_pdfs(main_doc, [extra], NumberOptions(),
+                             SpliceOptions(mode="insert", after_page=4))
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+        check("wstawienie na końcu", texts[-2:] == ["B1", "B2"], str(texts))
+
+        result = splice_pdfs(main_doc, [extra, third], NumberOptions(),
+                             SpliceOptions(mode="insert", after_page=1))
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+        check("kilka plików w kolejności",
+              texts == ["A1", "B1", "B2", "C1", "A2", "A3", "A4"], str(texts))
+
+        result = splice_pdfs(main_doc, [extra], NumberOptions(),
+                             SpliceOptions(mode="replace", replace_from=2, replace_to=3))
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+        check("zastąpienie: liczba stron", result.page_count_after == 4,
+              str(result.page_count_after))
+        check("zastąpienie: usunięte strony", result.replaced_pages == 2,
+              str(result.replaced_pages))
+        check("zastąpienie: zawartość",
+              texts == ["A1", "B1", "B2", "A4"], str(texts))
+
+        for name, spec in (
+            ("wstawienie poza dokumentem", SpliceOptions(mode="insert", after_page=9)),
+            ("zakres poza dokumentem", SpliceOptions(mode="replace", replace_from=3,
+                                                     replace_to=9)),
+        ):
+            try:
+                splice_pdfs(main_doc, [extra], NumberOptions(), spec)
+                check(name, False, "brak wyjątku")
+            except AssembleError:
+                check(name, True)
+
+        try:
+            splice_pdfs(main_doc, [], NumberOptions(), SpliceOptions())
+            check("brak plików do wstawienia", False, "brak wyjątku")
+        except AssembleError:
+            check("brak plików do wstawienia", True)
 
     print()
     if failures:

@@ -256,6 +256,18 @@
     font-size: 12px; color: var(--muted);
   }
   .folder-progress .bar { flex: 1; }
+  .composer { padding: 20px 22px 22px; }
+  .composer h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 16px; }
+  .dropzone.compact { padding: 16px; gap: 2px; }
+  .dropzone.compact .dz-title { font-size: 14px; }
+  .composer-summary {
+    margin-top: 4px; padding: 10px 12px; border-radius: 9px; font-size: 13px;
+    background: #f7f8fc; border: 1px solid var(--line); color: var(--muted);
+  }
+  .composer-summary.ready { background: var(--accent-soft); border-color: #dcdffb; color: var(--ink); }
+  .composer-summary.invalid { background: var(--err-soft); border-color: #f5c9c4; color: #8d2418; }
+  .insert-actions { display: flex; gap: 4px; }
+  .insert-actions button { padding: 2px 8px; font-size: 12px; }
   .preview-label { margin-top: 12px; }
   .preview-label .label {
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
@@ -302,6 +314,7 @@
   <div class="modes" role="tablist" aria-label="Tryb pracy">
     <button class="mode active" id="modeFile" role="tab" aria-selected="true">Jeden plik</button>
     <button class="mode" id="modeFolder" role="tab" aria-selected="false">Cały folder</button>
+    <button class="mode" id="modeSplice" role="tab" aria-selected="false">Wstaw / zastąp strony</button>
   </div>
 
   <!-- tryb: jeden plik -->
@@ -339,6 +352,62 @@
         <button class="secondary" id="loadFolderBtn" style="flex:none">Wczytaj</button>
       </div>
       <div class="folder-path" id="folderInfo">Nie wybrano folderu.</div>
+    </section>
+  </div>
+
+  <!-- tryb: wstaw / zastąp strony -->
+  <div id="spliceBlock" class="hidden">
+    <section class="card composer">
+      <h2>Wstaw lub zastąp strony</h2>
+
+      <div class="field">
+        <span class="label">Dokument główny</span>
+        <div class="inline">
+          <button class="secondary" id="pickMainBtn">Wybierz główny PDF...</button>
+          <span class="hint" id="mainInfo">nie wybrano</span>
+        </div>
+        <input type="file" id="mainFileInput" accept="application/pdf,.pdf" class="hidden">
+      </div>
+
+      <div class="field">
+        <span class="label">Co zrobić ze stronami z plików poniżej</span>
+        <div class="chips">
+          <label class="checkline"><input type="radio" name="spliceMode" value="insert" checked> wstaw w dokumencie</label>
+          <label class="checkline"><input type="radio" name="spliceMode" value="replace"> zastąp strony</label>
+        </div>
+      </div>
+
+      <div class="row" id="insertFields">
+        <div class="field">
+          <label class="label" for="afterPage">Wstaw po stronie</label>
+          <input type="number" id="afterPage" min="0" step="1" value="0">
+          <div class="hint">0 = na początku, 1 = po pierwszej stronie, N = po stronie N.</div>
+        </div>
+      </div>
+
+      <div class="row hidden" id="replaceFields">
+        <div class="field">
+          <label class="label" for="replaceFrom">Zastąp od strony</label>
+          <input type="number" id="replaceFrom" min="1" step="1" value="1">
+        </div>
+        <div class="field">
+          <label class="label" for="replaceTo">do strony</label>
+          <input type="number" id="replaceTo" min="1" step="1" value="1">
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">Pliki do wstawienia (kolejność ma znaczenie)</span>
+        <div class="dropzone compact" id="insertDropzone" tabindex="0" role="button"
+             aria-label="Dodaj pliki PDF do wstawienia">
+          <div class="dz-title">Dodaj pliki PDF</div>
+          <div class="dz-sub">kliknij albo przeciągnij tutaj</div>
+        </div>
+        <input type="file" id="insertFileInput" accept="application/pdf,.pdf" multiple class="hidden">
+        <ul class="filelist hidden" id="insertList"></ul>
+      </div>
+
+      <div class="composer-summary" id="spliceSummary">Wybierz dokument główny i pliki do wstawienia.</div>
     </section>
   </div>
 
@@ -580,6 +649,7 @@
     previewSeq: 0,
     jobId: null,
     jobTimer: null,
+    splice: { main: null, inserts: [], mode: "insert" },
     lastResult: null
   };
   var canPick = false;
@@ -831,15 +901,21 @@
     state.mode = mode;
     el("modeFile").classList.toggle("active", mode === "file");
     el("modeFolder").classList.toggle("active", mode === "folder");
+    el("modeSplice").classList.toggle("active", mode === "splice");
     el("modeFile").setAttribute("aria-selected", mode === "file" ? "true" : "false");
     el("modeFolder").setAttribute("aria-selected", mode === "folder" ? "true" : "false");
+    el("modeSplice").setAttribute("aria-selected", mode === "splice" ? "true" : "false");
     el("fileBlock").classList.toggle("hidden", mode !== "file");
     el("folderBlock").classList.toggle("hidden", mode !== "folder");
+    el("spliceBlock").classList.toggle("hidden", mode !== "splice");
     el("previewCard").classList.toggle("hidden", mode !== "file");
     el("folderPanel").classList.toggle("hidden", mode !== "folder");
-    el("againBtn").classList.toggle("hidden", mode === "folder");
+    workspace.classList.toggle("single", mode === "splice");
+    el("againBtn").classList.toggle("hidden", mode !== "file");
 
-    var ready = mode === "file" ? !!state.path : !!state.folder;
+    var ready = mode === "file" ? !!state.path
+      : mode === "folder" ? !!state.folder
+      : !!(state.splice.main && state.splice.inserts.length);
     workspace.classList.toggle("hidden", !ready);
     runBtn.disabled = state.busy || !ready;
     el("resultCard").classList.add("hidden");
@@ -853,6 +929,9 @@
     if (state.mode === "folder") {
       var count = state.folder ? state.folder.pdf_count : 0;
       runBtn.textContent = count ? "Ponumeruj " + count + " " + fileWord(count) : "Ponumeruj cały folder";
+    } else if (state.mode === "splice") {
+      var replace = spliceMode() === "replace";
+      runBtn.textContent = replace ? "Zastąp i ponumeruj" : "Wstaw i ponumeruj";
     } else {
       runBtn.textContent = "Ponumeruj strony";
     }
@@ -975,6 +1054,7 @@
   document.addEventListener("drop", function (event) {
     if (!event.dataTransfer || state.busy) return;
     event.preventDefault();
+    if (state.mode === "splice") return;
     var file = event.dataTransfer.files && event.dataTransfer.files[0];
     if (file) {
       if (state.mode !== "file") setMode("file");
@@ -1121,6 +1201,341 @@
   el("modeFolder").addEventListener("click", function () {
     setMode("folder");
   });
+  el("modeSplice").addEventListener("click", function () {
+    setMode("splice");
+    updateSpliceSummary();
+    renderInserts();
+  });
+
+  // --- wstaw / zastąp strony ------------------------------------------------
+  function spliceMode() {
+    var checked = document.querySelector('input[name="spliceMode"]:checked');
+    return checked ? checked.value : "insert";
+  }
+
+  function stageForSplice(file) {
+    return fetch("/api/stage?name=" + encodeURIComponent(file.name) + "&append=1", {
+      method: "POST",
+      headers: { "X-Token": TOKEN, "Content-Type": "application/pdf" },
+      body: file
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (payload) {
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || ("Błąd HTTP " + response.status));
+        }
+        if (payload.needs_password) {
+          throw new Error(file.name + ": plik jest zabezpieczony hasłem.");
+        }
+        return payload;
+      });
+    });
+  }
+
+  function setMain(info) {
+    state.splice.main = {
+      path: info.path,
+      name: info.name,
+      pages: info.page_count,
+      staged: !!info.staged
+    };
+    el("mainInfo").textContent = info.name + " · " + info.page_count + " " +
+      pageWord(info.page_count) + (info.staged ? " · kopia tymczasowa" : "");
+    el("afterPage").max = String(info.page_count);
+    el("replaceFrom").max = String(info.page_count);
+    el("replaceTo").max = String(info.page_count);
+    updateSpliceSummary();
+  }
+
+  function setMainFromFile(file) {
+    if (!/\.pdf$/i.test(file.name)) {
+      showError("To nie jest plik PDF.");
+      return;
+    }
+    clearError();
+    setBusy(true, "Przygotowuję dokument główny...");
+    stageForSplice(file)
+      .then(function (info) { setMain(info); })
+      .catch(function (error) { showError(error.message); })
+      .then(function () { setBusy(false); });
+  }
+
+  function addInsertFiles(files) {
+    var list = Array.prototype.slice.call(files || []).filter(function (file) {
+      return /\.pdf$/i.test(file.name);
+    });
+    if (!list.length) {
+      showError("Wybierz pliki PDF.");
+      return;
+    }
+    clearError();
+    setBusy(true, "Przygotowuję pliki...");
+    Promise.all(list.map(stageForSplice))
+      .then(function (infos) {
+        infos.forEach(function (info) {
+          state.splice.inserts.push({
+            path: info.path,
+            name: info.name,
+            pages: info.page_count
+          });
+        });
+        renderInserts();
+      })
+      .catch(function (error) { showError(error.message); })
+      .then(function () { setBusy(false); });
+  }
+
+  function pickMain() {
+    if (state.busy) return;
+    if (!canPick) { el("mainFileInput").click(); return; }
+    clearError();
+    setBusy(true, "Czekam na wybór pliku...");
+    api("/api/pick", {}).then(function (result) {
+      if (result.cancelled) return;
+      setMain(result);
+    }).catch(function (error) {
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function pickInserts() {
+    if (state.busy) return;
+    if (!canPick) { el("insertFileInput").click(); return; }
+    clearError();
+    setBusy(true, "Czekam na wybór plików...");
+    api("/api/pick-many", {}).then(function (result) {
+      if (result.cancelled) return;
+      var skipped = 0;
+      result.files.forEach(function (info) {
+        if (info.needs_password) { skipped += 1; return; }
+        state.splice.inserts.push({
+          path: info.path,
+          name: info.name,
+          pages: info.page_count
+        });
+      });
+      renderInserts();
+      if (skipped) showError("Pominięto " + skipped + " plik(ów) zabezpieczonych hasłem.");
+    }).catch(function (error) {
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function insertButton(label, action, index, disabled) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "icon-btn";
+    button.textContent = label;
+    button.dataset.action = action;
+    button.dataset.index = String(index);
+    button.disabled = !!disabled;
+    return button;
+  }
+
+  function renderInserts() {
+    var list = el("insertList");
+    var items = state.splice.inserts;
+    list.innerHTML = "";
+    items.forEach(function (item, index) {
+      var row = document.createElement("li");
+      var name = document.createElement("span");
+      name.className = "name";
+      name.textContent = (index + 1) + ". " + item.name;
+      var meta = document.createElement("span");
+      meta.className = "out";
+      meta.textContent = item.pages + " " + pageWord(item.pages);
+      var actions = document.createElement("span");
+      actions.className = "insert-actions";
+      actions.appendChild(insertButton("↑", "up", index, index === 0));
+      actions.appendChild(insertButton("↓", "down", index, index === items.length - 1));
+      actions.appendChild(insertButton("✕", "remove", index, false));
+      row.appendChild(name);
+      row.appendChild(meta);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+    list.classList.toggle("hidden", items.length === 0);
+    updateSpliceSummary();
+  }
+
+  function updateSpliceSummary() {
+    var main = state.splice.main;
+    var inserts = state.splice.inserts;
+    var insertedPages = inserts.reduce(function (sum, item) {
+      return sum + (item.pages || 0);
+    }, 0);
+    var box = el("spliceSummary");
+    box.classList.remove("ready", "invalid");
+
+    var ready = false;
+    var text;
+
+    if (!main) {
+      text = "Wybierz dokument główny i pliki do wstawienia.";
+    } else if (!inserts.length) {
+      text = "Dokument główny: " + main.pages + " " + pageWord(main.pages) +
+        ". Dodaj pliki do wstawienia.";
+    } else if (spliceMode() === "insert") {
+      var after = clamp(Math.round(numeric("afterPage", 0)), 0, main.pages);
+      var resultPages = main.pages + insertedPages;
+      text = "Dokument główny ma " + main.pages + " " + pageWord(main.pages) +
+        ", wstawiasz " + inserts.length + " " + fileWord(inserts.length) + " (" +
+        insertedPages + " " + pageWord(insertedPages) + ") po stronie " + after +
+        ". Wynik: " + resultPages + " " + pageWord(resultPages) + ".";
+      ready = true;
+    } else {
+      var from = Math.round(numeric("replaceFrom", 1));
+      var to = Math.round(numeric("replaceTo", 1));
+      if (from < 1 || to < from || to > main.pages) {
+        text = "Zakres " + from + "-" + to + " jest niepoprawny - dokument ma " +
+          main.pages + " " + pageWord(main.pages) + ".";
+        box.classList.add("invalid");
+      } else {
+        var replaced = to - from + 1;
+        var afterReplace = main.pages - replaced + insertedPages;
+        text = "Zastępujesz strony " + from + "-" + to + " (" + replaced + " " +
+          pageWord(replaced) + ") plikami: " + inserts.length + " " +
+          fileWord(inserts.length) + " (" + insertedPages + " " +
+          pageWord(insertedPages) + "). Wynik: " + afterReplace + " " +
+          pageWord(afterReplace) + ".";
+        ready = true;
+      }
+    }
+
+    box.textContent = text;
+    if (ready) box.classList.add("ready");
+    if (state.mode === "splice") {
+      workspace.classList.toggle("hidden", !ready);
+      runBtn.disabled = state.busy || !ready;
+    }
+  }
+
+  function runSplice() {
+    var main = state.splice.main;
+    if (!main || !state.splice.inserts.length) return;
+
+    var options = collectOptions();
+    if (options.template.indexOf("{n") === -1) {
+      showError("Format numeru musi zawierać znacznik {n}, np. „{n} / {total}”.");
+      return;
+    }
+
+    var mode = spliceMode();
+    var spec = { mode: mode };
+    if (mode === "insert") {
+      spec.after_page = clamp(Math.round(numeric("afterPage", 0)), 0, main.pages);
+    } else {
+      spec.replace_from = Math.round(numeric("replaceFrom", 1));
+      spec.replace_to = Math.round(numeric("replaceTo", 1));
+    }
+
+    clearError();
+    el("resultCard").classList.add("hidden");
+    setBusy(true, mode === "insert" ? "Wstawiam strony i numeruję..." : "Zastępuję strony i numeruję...");
+
+    api("/api/splice", {
+      main: main.path,
+      inserts: state.splice.inserts.map(function (item) { return item.path; }),
+      spec: spec,
+      options: options
+    }).then(function (result) {
+      return result.staged ? downloadResult(result) : result;
+    }).then(function (result) {
+      showSpliceResult(result);
+    }).catch(function (error) {
+      showError(error.message);
+    }).then(function () {
+      setBusy(false);
+    });
+  }
+
+  function showSpliceResult(result) {
+    resetResult();
+    state.lastResult = result;
+    el("resultCard").classList.remove("hidden");
+    var action = result.replaced_pages
+      ? "Zastąpiono " + result.replaced_pages + " " + pageWord(result.replaced_pages)
+      : "Wstawiono " + result.inserted_pages + " " + pageWord(result.inserted_pages);
+    el("resultTitle").textContent = "Gotowe";
+    el("resultSub").textContent = action + " - dokument ma teraz " +
+      result.page_count_after + " " + pageWord(result.page_count_after) +
+      ", numeracja " + result.first_number + "-" + result.last_number + ".";
+    el("resultPath").textContent = result.uploaded ? result.output_name : result.output;
+    el("revealBtn").classList.toggle("hidden", !!result.uploaded);
+    el("openBtn").classList.toggle("hidden", !!result.uploaded);
+    el("resultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  el("pickMainBtn").addEventListener("click", pickMain);
+  el("mainFileInput").addEventListener("change", function () {
+    var file = el("mainFileInput").files && el("mainFileInput").files[0];
+    if (file) setMainFromFile(file);
+    el("mainFileInput").value = "";
+  });
+
+  el("insertDropzone").addEventListener("click", pickInserts);
+  el("insertDropzone").addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pickInserts(); }
+  });
+  el("insertFileInput").addEventListener("change", function () {
+    var files = el("insertFileInput").files;
+    if (files && files.length) addInsertFiles(files);
+    el("insertFileInput").value = "";
+  });
+  ["dragenter", "dragover"].forEach(function (type) {
+    el("insertDropzone").addEventListener(type, function (event) {
+      if (!event.dataTransfer) return;
+      event.preventDefault();
+      el("insertDropzone").classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (type) {
+    el("insertDropzone").addEventListener(type, function () {
+      el("insertDropzone").classList.remove("dragover");
+    });
+  });
+  el("insertDropzone").addEventListener("drop", function (event) {
+    if (!event.dataTransfer) return;
+    event.preventDefault();
+    event.stopPropagation();
+    addInsertFiles(event.dataTransfer.files);
+  });
+
+  document.querySelectorAll('input[name="spliceMode"]').forEach(function (radio) {
+    radio.addEventListener("change", function () {
+      var replace = spliceMode() === "replace";
+      el("insertFields").classList.toggle("hidden", replace);
+      el("replaceFields").classList.toggle("hidden", !replace);
+      updateRunLabel();
+      updateSpliceSummary();
+    });
+  });
+  ["afterPage", "replaceFrom", "replaceTo"].forEach(function (id) {
+    el(id).addEventListener("input", updateSpliceSummary);
+  });
+
+  el("insertList").addEventListener("click", function (event) {
+    var button = event.target.closest("button[data-action]");
+    if (!button) return;
+    var index = Number(button.dataset.index);
+    var action = button.dataset.action;
+    var items = state.splice.inserts;
+    if (action === "remove") {
+      items.splice(index, 1);
+    } else if (action === "up" && index > 0) {
+      var previous = items[index - 1];
+      items[index - 1] = items[index];
+      items[index] = previous;
+    } else if (action === "down" && index < items.length - 1) {
+      var next = items[index + 1];
+      items[index + 1] = items[index];
+      items[index] = next;
+    }
+    renderInserts();
+  });
 
   // --- podgląd --------------------------------------------------------------
   function previewTarget() {
@@ -1251,7 +1666,9 @@
     document.querySelectorAll("button").forEach(function (button) {
       if (button !== runBtn) button.disabled = busy;
     });
-    var ready = state.mode === "file" ? !!state.path : (!!state.folder && state.folder.pdf_count > 0);
+    var ready = state.mode === "file" ? !!state.path
+      : state.mode === "folder" ? (!!state.folder && state.folder.pdf_count > 0)
+      : !!(state.splice.main && state.splice.inserts.length);
     runBtn.disabled = busy || !ready;
     prevBtn.disabled = busy || !state.previewTotal || (state.previewPage || 1) <= 1;
     nextBtn.disabled = busy || !state.previewTotal || state.previewPage >= state.previewTotal;
@@ -1260,6 +1677,7 @@
   function run() {
     if (state.busy) return;
     if (state.mode === "folder") return runFolder();
+    if (state.mode === "splice") return runSplice();
 
     if (!state.path) return;
     clearError();
@@ -1507,6 +1925,8 @@
   applyStoredOptions();
   updatePreviewExample();
   setMode("file");
+  renderInserts();
+  updateSpliceSummary();
 
   fetch("/api/health").then(function (r) { return r.json(); }).then(function (info) {
     canPick = !!info.can_pick;

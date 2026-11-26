@@ -98,6 +98,8 @@ class DialogHost:
     def _execute(self, job: _Job):
         if job.kind == "open_pdf":
             return self._pick_pdf()
+        if job.kind == "open_pdfs":
+            return self._pick_pdfs()
         if job.kind == "open_dir":
             return self._pick_folder()
         if job.kind == "close":
@@ -128,6 +130,10 @@ class DialogHost:
     def ask_pdf_path(self, timeout: float = 600.0) -> Path | None:
         result = self._submit("open_pdf", timeout)
         return Path(result) if result else None
+
+    def ask_pdf_paths(self, timeout: float = 600.0) -> list[Path]:
+        result = self._submit("open_pdfs", timeout)
+        return [Path(value) for value in (result or [])]
 
     def ask_directory(self, timeout: float = 600.0) -> Path | None:
         result = self._submit("open_dir", timeout)
@@ -185,6 +191,18 @@ class DialogHost:
         finally:
             self._hide()
         return chosen or ""
+
+    def _pick_pdfs(self) -> list[str]:
+        self._foreground()
+        try:
+            chosen = filedialog.askopenfilenames(
+                parent=self._root,
+                title="Wybierz pliki PDF do wstawienia",
+                filetypes=[("Dokumenty PDF", "*.pdf"), ("Wszystkie pliki", "*.*")],
+            )
+        finally:
+            self._hide()
+        return list(chosen or [])
 
     def _message(self, text: str, title: str, kind: str = "info") -> None:
         root = self._root

@@ -18,6 +18,8 @@ Kod na licencji MIT, całość (z PyMuPDF) na AGPL-3.0 — szczegóły w [LICENS
   (`Strona iv z xii`) oraz powiększona próbka samego napisu (czcionka, kolor, krycie),
 - **tryb folderu** - numeruje wszystkie PDF-y w katalogu (opcjonalnie z podfolderami),
   jedne ustawienia dla wszystkich plików, lista z postępem „plik po pliku",
+- **wstawianie i zastępowanie stron** - dołóż jeden lub kilka PDF-ów w wybrane miejsce
+  głównego dokumentu albo zastąp nimi wybrane strony; wynik jest od razu numerowany,
 - **style cyfr** - arabskie, rzymskie (`i, ii, III`) i litery (`a, b`), także **osobna
   numeracja dodatku** (np. treść 1–20, dodatek i–v),
 - **maskowanie starego numeru** - biały prostokąt w miejscu nowego numeru,
@@ -64,6 +66,11 @@ Dwa tryby pracy (przełącznik u góry):
   podfoldery" podpowiada, gdy w podfolderach są jeszcze pliki PDF. Kopie powstają
   obok oryginałów (kolejne uruchomienie dodaje `_2`, `_3`...), pliki `*_numerowany`
   są pomijane, a błąd jednego pliku nie przerywa reszty.
+- **Wstaw / zastąp strony** — wybierasz dokument główny, określasz miejsce („wstaw po
+  stronie N", gdzie 0 = początek, albo „zastąp strony od A do B") i dodajesz jeden lub
+  kilka PDF-ów w wybranej kolejności. Program składa dokument, a potem numeruje wynik
+  jednym zestawem ustawień. Oryginał zostaje nietknięty — powstaje kopia
+  `nazwa_numerowany.pdf`.
 
 Opcje: pozycja numeru (siatka 3×3), numeracja naprzemienna, format (`{n}`, `{n} / {total}`,
 `Strona {n} z {total}`), styl cyfr, dodatek od wskazanej strony, zakresy stron,
@@ -102,6 +109,7 @@ od razu i pokazuje podsumowanie.
 ```
 numerator/
   core.py      # numerowanie (PyMuPDF), plan numeracji, podgląd, zapis atomowy
+  assemble.py  # wstawianie i zastępowanie stron (składanie dokumentu)
   options.py   # NumberOptions, zakresy stron, style cyfr, walidacja i szablony
   paths.py     # nazwy plików wynikowych, ochrona oryginału
   batch.py     # numerowanie całego folderu + raport

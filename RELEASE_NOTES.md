@@ -27,14 +27,12 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
-- **tryb folderu: postęp „plik po pliku"** — lista plików z wynikiem dla każdego
-  (✓ gotowe / ✗ błąd), licznik `3 / 12 · nazwa.pdf` i podsumowanie na końcu,
-- **odporność na błędy** — uszkodzony lub zablokowany plik nie zatrzymuje numerowania
-  pozostałych; komunikat pojawia się przy konkretnym pliku,
-- **podpowiedź o podfolderach** — gdy w podfolderach są pliki PDF, interfejs mówi
-  o tym wprost; przy pustym folderze głównym włącza je automatycznie,
-- w trybie folderu ukryty jest podgląd strony — liczy się lista plików i jeden
-  zestaw ustawień dla wszystkich.
+- **nowy tryb: „Wstaw / zastąp strony"** — dołóż jeden lub kilka PDF-ów w wybrane miejsce
+  dokumentu głównego albo zastąp nimi wybrane strony; wynik jest od razu numerowany,
+- lista plików do wstawienia z ustalaniem kolejności (góra/dół) i usuwaniem,
+- podsumowanie przed uruchomieniem („wynik: N stron") i walidacja zakresów,
+- oryginał dokumentu głównego pozostaje nietknięty — powstaje kopia `_numerowany`,
+- **wersja testowa** — stabilna pozostaje 0.4.6.
 
 ## Najważniejsze funkcje
 

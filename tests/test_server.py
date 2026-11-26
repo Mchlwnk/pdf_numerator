@@ -300,7 +300,55 @@ def main() -> int:
             check("pusta etykieta dla pominiętej strony",
                   headers.get("X-Preview-Label") == "", repr(headers.get("X-Preview-Label")))
 
-            print("[8] probka napisu")
+            print("[8] wstawianie stron przez API")
+            splice_main = make_pdf(tmp / "splice-main.pdf", pages=3)
+            splice_extra = make_pdf(tmp / "splice-extra.pdf", pages=2)
+            status, _, body = call(base + "/api/stage?name=dodatek.pdf",
+                                   raw=splice_extra.read_bytes(),
+                                   content_type="application/pdf")
+            staged_insert = json.loads(body)
+
+            status, _, body = call(base + "/api/splice", payload={
+                "main": str(splice_main),
+                "inserts": [staged_insert["path"]],
+                "spec": {"mode": "insert", "after_page": 1},
+                "options": {"template": "{n}"},
+            })
+            spliced = json.loads(body)
+            check("splice ok", status == 200 and spliced.get("ok") is True, body[:200])
+            check("splice: liczba stron", spliced["page_count_after"] == 5,
+                  str(spliced.get("page_count_after")))
+            check("splice: numeracja", (spliced["first_number"], spliced["last_number"]) == (1, 5),
+                  str(spliced))
+            check("splice: wynik poza sesją", spliced["staged"] is False)
+            with pymupdf.open(spliced["output"]) as doc:
+                check("splice: numer na ostatniej stronie",
+                      "5" in doc[4].get_text().splitlines()[-1], doc[4].get_text()[-30:])
+
+            status, _, body = call(base + "/api/splice", payload={
+                "main": str(splice_main),
+                "inserts": [staged_insert["path"]],
+                "spec": {"mode": "replace", "replace_from": 2, "replace_to": 3},
+                "options": {"template": "{n}"},
+            })
+            replaced = json.loads(body)
+            check("replace ok", status == 200 and replaced["replaced_pages"] == 2, body[:200])
+            check("replace: liczba stron", replaced["page_count_after"] == 3,
+                  str(replaced.get("page_count_after")))
+
+            status, _, body = call(base + "/api/splice", payload={
+                "main": str(splice_main), "inserts": [staged_insert["path"]],
+                "spec": {"mode": "insert", "after_page": 99},
+            })
+            check("splice: pozycja poza dokumentem", status == 400, str(status))
+            status, _, body = call(base + "/api/splice", payload={
+                "main": str(splice_main), "inserts": [],
+            })
+            check("splice: brak plikow", status == 400, str(status))
+            status, _, body = call(base + "/api/pick-many", payload={})
+            check("pick-many bez Tk -> 501", status == 501, str(status))
+
+            print("[9] probka napisu")
             status, headers, body = call(base + "/api/label-sample", payload={
                 "path": str(style_src),
                 "options": {"style": "roman", "template": "Strona {n} z {total}"},
@@ -316,13 +364,13 @@ def main() -> int:
             })
             check("probka dla pominiętej strony to blad", status == 400, str(status))
 
-            print("[9] wybor pliku bez Tk i 404")
+            print("[10] wybor pliku bez Tk i 404")
             status, _, body = call(base + "/api/pick", payload={})
             check("pick bez Tk -> 501", status == 501, str(status))
             status, _, body = call(base + "/api/nieznany", payload={})
             check("nieznany endpoint", status == 404, str(status))
 
-            print("[10] zamkniecie")
+            print("[11] zamkniecie")
             status, _, body = call(base + "/api/quit", payload={})
             check("quit ok", status == 200 and json.loads(body)["ok"] is True)
         finally:

@@ -15,6 +15,7 @@ param(
     [string]$Version = "",
     [switch]$SkipBuild,
     [switch]$Sign,
+    [switch]$Prerelease,
     [string]$SignThumbprint = $env:PDFN_SIGN_THUMBPRINT,
     [string]$SignPfx = $env:PDFN_SIGN_PFX,
     [string]$SignPfxPassword = $env:PDFN_SIGN_PASSWORD
@@ -92,7 +93,15 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Wydanie $tag już istnieje - podmieniam pliki." -ForegroundColor Yellow
     & gh release upload $tag $exe $sourceZip --clobber
 } else {
-    & gh release create $tag $exe $sourceZip --title "PDF Numerator $Version" --notes-file $notesPath
+    $title = "PDF Numerator $Version"
+    if ($Prerelease) { $title += " (wersja testowa)" }
+    $releaseArgs = @(
+        $tag, $exe, $sourceZip,
+        "--title", $title,
+        "--notes-file", $notesPath
+    )
+    if ($Prerelease) { $releaseArgs += "--prerelease" }
+    & gh release create @releaseArgs
 }
 if ($LASTEXITCODE -ne 0) { throw "Publikacja wydania nie powiodła się." }
 

@@ -20,6 +20,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__
+from .assemble import AssembleError, SpliceOptions, splice_pdfs
 from .batch import MAX_FILES, BatchError, find_pdfs, number_folder, read_folder
 from .core import (
     NumberingError,
@@ -85,14 +86,22 @@ class LocalApp:
 
     # -- pliki przesłane przez przeglądarkę -----------------------------------
 
-    def stage_pdf(self, filename: str, data: bytes) -> Path:
+    def stage_pdf(self, filename: str, data: bytes, replace: bool = False) -> Path:
         """Zapisuje przesłany plik w katalogu tymczasowym i zwraca jego ścieżkę."""
         with self._stage_lock:
-            self.clear_stage()
-            directory = Path(tempfile.mkdtemp(prefix="pdfnum-stage-"))
-            path = directory / _safe_filename(filename)
+            if replace or self._stage_dir is None:
+                self.clear_stage()
+                self._stage_dir = Path(tempfile.mkdtemp(prefix="pdfnum-stage-"))
+            directory = self._stage_dir
+            safe = _safe_filename(filename)
+            stem, _, extension = safe.rpartition(".")
+            stem = stem or "dokument"
+            path = directory / safe
+            index = 1
+            while path.exists():
+                index += 1
+                path = directory / f"{stem}_{index}.{extension}"
             path.write_bytes(data)
-            self._stage_dir = directory
             return path
 
     def clear_stage(self) -> None:
@@ -345,8 +354,12 @@ def _make_handler(app: LocalApp):
             try:
                 if parsed.path == "/api/pick":
                     return self._handle_pick()
+                if parsed.path == "/api/pick-many":
+                    return self._handle_pick_many()
                 if parsed.path == "/api/pick-folder":
                     return self._handle_pick_folder()
+                if parsed.path == "/api/splice":
+                    return self._handle_splice()
                 if parsed.path == "/api/scan":
                     return self._handle_scan()
                 if parsed.path == "/api/folder-number":
@@ -374,7 +387,7 @@ def _make_handler(app: LocalApp):
                 if parsed.path == "/api/quit":
                     return self._handle_quit()
             except (ApiError, PathError, OptionsError, NumberingError, BatchError,
-                    DialogUnavailable) as exc:
+                    AssembleError, DialogUnavailable) as exc:
                 message = getattr(exc, "message", None) or str(exc)
                 log.warning("Błąd %s: %s", parsed.path, message)
                 return self._error(message, getattr(exc, "status", 400))
@@ -405,6 +418,67 @@ def _make_handler(app: LocalApp):
             path = _require_path(data)
             info = inspect_pdf(path)
             return self._json({"ok": True, **file_info(info)})
+
+        def _handle_pick_many(self) -> None:
+            self._json_body()
+            if not app.dialogs.available:
+                raise ApiError(
+                    "Wybór wielu plików z okna systemowego jest niedostępny.", 501
+                )
+            chosen = app.dialogs.ask_pdf_paths()
+            if not chosen:
+                return self._json({"ok": True, "cancelled": True, "files": []})
+            files = []
+            for path in chosen:
+                info = inspect_pdf(path)
+                files.append({
+                    "path": str(info.path),
+                    "name": info.path.name,
+                    "page_count": info.page_count,
+                    "size_bytes": info.size_bytes,
+                    "needs_password": info.needs_password,
+                })
+            return self._json({"ok": True, "cancelled": False, "files": files})
+
+        def _handle_splice(self) -> None:
+            data = self._json_body()
+            main_value = data.get("main")
+            if not isinstance(main_value, str) or not main_value.strip():
+                raise ApiError("Brak ścieżki do dokumentu głównego.")
+            main = ensure_pdf_source(Path(main_value))
+            raw_inserts = data.get("inserts")
+            if not isinstance(raw_inserts, list) or not raw_inserts:
+                raise ApiError("Dodaj co najmniej jeden plik PDF do wstawienia.")
+            inserts = []
+            for value in raw_inserts:
+                if not isinstance(value, str) or not value.strip():
+                    raise ApiError("Niepoprawna lista plików do wstawienia.")
+                inserts.append(ensure_pdf_source(Path(value)))
+
+            spec_data = data.get("spec") or {}
+            spec = SpliceOptions(
+                mode=str(spec_data.get("mode", "insert")),
+                after_page=_int_field(spec_data, "after_page", 0),
+                replace_from=_int_field(spec_data, "replace_from", 1),
+                replace_to=_int_field(spec_data, "replace_to", 1),
+            )
+            options = NumberOptions.from_dict(data.get("options"))
+            result = splice_pdfs(main, inserts, options, spec)
+            log.info("Złożono dokument: %s", result.describe())
+            return self._json({
+                "ok": True,
+                "output": str(result.output_path),
+                "output_name": result.output_path.name,
+                "staged": app.is_staged(result.output_path),
+                "page_count_before": result.page_count_before,
+                "page_count_after": result.page_count_after,
+                "inserted_pages": result.inserted_pages,
+                "replaced_pages": result.replaced_pages,
+                "pages_numbered": result.numbered.pages_numbered,
+                "first_number": result.numbered.first_number,
+                "last_number": result.numbered.last_number,
+                "warnings": [],
+            })
 
         def _handle_pick_folder(self) -> None:
             self._json_body()
@@ -503,9 +577,9 @@ def _make_handler(app: LocalApp):
                 if info.needs_password:
                     raise ApiError("Ten PDF jest zabezpieczony hasłem.")
             except Exception:
-                app.clear_stage()
+                path.unlink(missing_ok=True)
                 raise
-            log.info("Przygotowano plik do podglądu: %s (%s stron)", path.name, info.page_count)
+            log.info("Przygotowano plik: %s (%s stron)", path.name, info.page_count)
             return self._json({"ok": True, "staged": True, **file_info(info)})
 
         def _handle_preview(self) -> None:
@@ -578,6 +652,14 @@ def _require_path(data: dict) -> str:
         raise ApiError("Brak ścieżki do pliku.")
     ensure_pdf_source(Path(path))
     return path
+
+
+def _int_field(data: dict, name: str, default: int) -> int:
+    value = data.get(name, default)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ApiError(f"Niepoprawna wartość pola {name}.")
 
 
 def _require_folder(data: dict) -> Path:
