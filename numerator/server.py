@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__
-from .assemble import AssembleError, SpliceOptions, splice_pdfs
+from .assemble import AssembleError, SpliceOperation, splice_pdfs
 from .batch import MAX_FILES, BatchError, find_pdfs, number_folder, read_folder
 from .core import (
     NumberingError,
@@ -446,25 +446,34 @@ def _make_handler(app: LocalApp):
             if not isinstance(main_value, str) or not main_value.strip():
                 raise ApiError("Brak ścieżki do dokumentu głównego.")
             main = ensure_pdf_source(Path(main_value))
+
             raw_inserts = data.get("inserts")
             if not isinstance(raw_inserts, list) or not raw_inserts:
                 raise ApiError("Dodaj co najmniej jeden plik PDF do wstawienia.")
-            inserts = []
-            for value in raw_inserts:
-                if not isinstance(value, str) or not value.strip():
-                    raise ApiError("Niepoprawna lista plików do wstawienia.")
-                inserts.append(ensure_pdf_source(Path(value)))
 
-            spec_data = data.get("spec") or {}
-            spec = SpliceOptions(
-                mode=str(spec_data.get("mode", "insert")),
-                after_page=_int_field(spec_data, "after_page", 0),
-                replace_from=_int_field(spec_data, "replace_from", 1),
-                replace_to=_int_field(spec_data, "replace_to", 1),
-            )
+            operations: list[SpliceOperation] = []
+            for entry in raw_inserts:
+                if isinstance(entry, str):
+                    operations.append(SpliceOperation(path=entry))
+                    continue
+                if not isinstance(entry, dict):
+                    raise ApiError("Niepoprawna lista plików do wstawienia.")
+                path = entry.get("path")
+                if not isinstance(path, str) or not path.strip():
+                    raise ApiError("Brak ścieżki jednego z plików do wstawienia.")
+                operations.append(SpliceOperation(
+                    path=path,
+                    mode=str(entry.get("mode", "insert")),
+                    after_page=_int_field(entry, "after_page", 0),
+                    replace_from=_int_field(entry, "replace_from", 1),
+                    replace_to=_int_field(entry, "replace_to", 1),
+                ))
+
             options = NumberOptions.from_dict(data.get("options"))
-            result = splice_pdfs(main, inserts, options, spec)
+            number = bool(data.get("number", True))
+            result = splice_pdfs(main, operations, options, number=number)
             log.info("Złożono dokument: %s", result.describe())
+            numbered = result.numbered
             return self._json({
                 "ok": True,
                 "output": str(result.output_path),
@@ -474,9 +483,10 @@ def _make_handler(app: LocalApp):
                 "page_count_after": result.page_count_after,
                 "inserted_pages": result.inserted_pages,
                 "replaced_pages": result.replaced_pages,
-                "pages_numbered": result.numbered.pages_numbered,
-                "first_number": result.numbered.first_number,
-                "last_number": result.numbered.last_number,
+                "numbered": numbered is not None,
+                "pages_numbered": numbered.pages_numbered if numbered else 0,
+                "first_number": numbered.first_number if numbered else None,
+                "last_number": numbered.last_number if numbered else None,
                 "warnings": [],
             })
 

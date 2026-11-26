@@ -27,11 +27,12 @@ Oczekiwana suma:
 
 ## Co nowego w {{VERSION}}
 
-- **nowy tryb: „Wstaw / zastąp strony"** — dołóż jeden lub kilka PDF-ów w wybrane miejsce
-  dokumentu głównego albo zastąp nimi wybrane strony; wynik jest od razu numerowany,
-- lista plików do wstawienia z ustalaniem kolejności (góra/dół) i usuwaniem,
-- podsumowanie przed uruchomieniem („wynik: N stron") i walidacja zakresów,
-- oryginał dokumentu głównego pozostaje nietknięty — powstaje kopia `_numerowany`,
+- **numeracja opcjonalna przy składaniu** — checkbox „numeruj strony po złożeniu":
+  bez numeracji powstaje `nazwa_zlozony.pdf`, z numeracją `nazwa_numerowany.pdf`,
+- **osobne miejsce dla każdego pliku** — każdy PDF można wstawić po innej stronie albo
+  zastąpić nim inny zakres stron; walidacja zakresów i nakładania się,
+- **dokument główny można przeciągnąć** (nie tylko wybrać z dysku),
+- **kompaktowe pola przeciągania** plików,
 - **wersja testowa** — stabilna pozostaje 0.4.6.
 
 ## Najważniejsze funkcje

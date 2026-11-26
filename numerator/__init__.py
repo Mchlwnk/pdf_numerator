@@ -1,6 +1,6 @@
 """Publiczne API pakietu numerator."""
 
-from .assemble import AssembleError, SpliceOptions, SpliceResult, splice_pdfs
+from .assemble import AssembleError, SpliceOperation, SpliceResult, splice_pdfs
 from .core import (
     LabelPlan,
     NumberingError,
@@ -40,7 +40,7 @@ __all__ = [
     "PathError",
     "PdfInfo",
     "PreviewImage",
-    "SpliceOptions",
+    "SpliceOperation",
     "SpliceResult",
     "build_plan",
     "format_label",
@@ -58,4 +58,4 @@ __all__ = [
     "to_roman",
 ]
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"

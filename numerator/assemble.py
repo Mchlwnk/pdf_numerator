@@ -1,4 +1,9 @@
-"""Składanie dokumentów: wstawianie stron z innych PDF-ów i zastępowanie stron."""
+"""Składanie dokumentów: wstawianie stron z innych PDF-ów i zastępowanie stron.
+
+Każdy plik dodatkowy ma własną operację (wstaw po stronie N albo zastąp zakres stron).
+Numery stron odnoszą się do **oryginalnego** dokumentu głównego - operacje są
+wykonywane od końca dokumentu, więc wcześniejsze numery pozostają aktualne.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +12,12 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .core import NumberingResult, _open_pdf, number_pdf
+from .core import NumberingResult, _open_pdf, _save_atomically, number_pdf
 from .options import NumberOptions
 from .paths import ensure_pdf_source, resolve_output
 
 SPLICE_MODES = ("insert", "replace")
+ASSEMBLED_SUFFIX = "_zlozony"
 
 
 class AssembleError(RuntimeError):
@@ -19,28 +25,29 @@ class AssembleError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class SpliceOptions:
-    """Gdzie i jak wstawić strony.
+class SpliceOperation:
+    """Jedna operacja: plik źródłowy i miejsce, w które trafia."""
 
-    ``insert``  - wstawia pliki po stronie ``after_page`` (0 = na początku).
-    ``replace`` - usuwa strony ``replace_from``-``replace_to`` i wstawia w to miejsce pliki.
-    Wszystkie numery stron są 1-based, jak w interfejsie.
-    """
-
+    path: str | Path
     mode: str = "insert"
-    after_page: int = 0
-    replace_from: int = 1
-    replace_to: int = 1
+    after_page: int = 0  # insert: 0 = początek, N = po stronie N (numeracja oryginału)
+    replace_from: int = 1  # replace: pierwsza zastępowana strona
+    replace_to: int = 1  # replace: ostatnia zastępowana strona
 
     def __post_init__(self) -> None:
         if self.mode not in SPLICE_MODES:
-            raise AssembleError(f"Nieznany tryb: {self.mode!r}.")
+            raise AssembleError(f"Nieznany tryb operacji: {self.mode!r}.")
         for name in ("after_page", "replace_from", "replace_to"):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise AssembleError(f"{name} musi być liczbą całkowitą nieujemną.")
         if self.mode == "replace" and self.replace_to < self.replace_from:
             raise AssembleError("Koniec zakresu zastępowania jest przed początkiem.")
+
+    @property
+    def anchor(self) -> int:
+        """Pozycja w dokumencie (0-based) używana do sortowania operacji."""
+        return self.after_page if self.mode == "insert" else self.replace_from - 1
 
 
 @dataclass
@@ -50,91 +57,130 @@ class SpliceResult:
     page_count_after: int
     inserted_pages: int
     replaced_pages: int
-    numbered: NumberingResult
+    numbered: NumberingResult | None = None
 
     def describe(self) -> str:
+        numbering = (
+            f"numeracja {self.numbered.first_number}-{self.numbered.last_number}"
+            if self.numbered is not None
+            else "bez numeracji"
+        )
         return (
             f"Zapisano {self.output_path.name}: {self.page_count_before} → "
-            f"{self.page_count_after} stron, numeracja {self.numbered.first_number}-"
-            f"{self.numbered.last_number}."
+            f"{self.page_count_after} stron, {numbering}."
         )
+
+
+def _validate_operations(operations: list[SpliceOperation], total_pages: int) -> None:
+    replacements: list[tuple[int, int]] = []
+    for operation in operations:
+        if operation.mode == "insert":
+            if not 0 <= operation.after_page <= total_pages:
+                raise AssembleError(
+                    f"Nie można wstawić po stronie {operation.after_page} - "
+                    f"dokument ma {total_pages} stron."
+                )
+        else:
+            if not 1 <= operation.replace_from <= operation.replace_to <= total_pages:
+                raise AssembleError(
+                    f"Zakres {operation.replace_from}-{operation.replace_to} jest poza "
+                    f"dokumentem (dokument ma {total_pages} stron)."
+                )
+            replacements.append((operation.replace_from, operation.replace_to))
+
+    replacements.sort()
+    for (start_a, end_a), (start_b, _end_b) in zip(replacements, replacements[1:]):
+        if start_b <= end_a:
+            raise AssembleError(
+                "Zakresy zastępowania nakładają się - popraw strony w plikach dodatkowych."
+            )
+
+    for operation in operations:
+        if operation.mode != "insert":
+            continue
+        for start, end in replacements:
+            if start - 1 <= operation.after_page <= end - 1:
+                raise AssembleError(
+                    "Wstawka wypada w obrębie zastępowanego zakresu stron "
+                    f"({start}-{end}) - zmień miejsce wstawienia."
+                )
 
 
 def splice_pdfs(
     main: str | Path,
-    inserts: list[str | Path],
+    operations: list[SpliceOperation],
     options: NumberOptions | None = None,
-    spec: SpliceOptions | None = None,
+    number: bool = True,
 ) -> SpliceResult:
-    """Składa dokument (wstawia/zastępuje strony), a następnie numeruje wynik."""
+    """Składa dokument według listy operacji, opcjonalnie numeruje wynik."""
     options = options or NumberOptions()
-    spec = spec or SpliceOptions()
-    main_path = ensure_pdf_source(Path(main))
-    insert_paths = [ensure_pdf_source(Path(path)) for path in inserts]
-    if not insert_paths:
+    if not operations:
         raise AssembleError("Dodaj co najmniej jeden plik PDF do wstawienia.")
+
+    main_path = ensure_pdf_source(Path(main))
+    prepared = [
+        SpliceOperation(
+            path=ensure_pdf_source(Path(operation.path)),
+            mode=operation.mode,
+            after_page=operation.after_page,
+            replace_from=operation.replace_from,
+            replace_to=operation.replace_to,
+        )
+        for operation in operations
+    ]
 
     doc = _open_pdf(main_path)
     temp_path: Path | None = None
     try:
         before = doc.page_count
+        _validate_operations(prepared, before)
+
         inserted = 0
         replaced = 0
-
-        if spec.mode == "insert":
-            # after_page=0 -> na początku; after_page=N -> po stronie N
-            if not 0 <= spec.after_page <= before:
-                raise AssembleError(
-                    f"Nie można wstawić po stronie {spec.after_page} - dokument ma {before} stron."
-                )
-            position = spec.after_page
-            for path in insert_paths:
-                source = _open_pdf(path)
-                try:
-                    inserted += source.page_count
-                    doc.insert_pdf(source, start_at=position)
-                    position += source.page_count
-                finally:
-                    source.close()
-        else:
-            start = spec.replace_from - 1
-            end = spec.replace_to - 1
-            if not 0 <= start <= end < before:
-                raise AssembleError(
-                    f"Zakres stron {spec.replace_from}-{spec.replace_to} jest poza dokumentem "
-                    f"(dokument ma {before} stron)."
-                )
-            replaced = end - start + 1
-            doc.delete_pages(start, end)
-            position = start
-            for path in insert_paths:
-                source = _open_pdf(path)
-                try:
-                    inserted += source.page_count
-                    doc.insert_pdf(source, start_at=position)
-                    position += source.page_count
-                finally:
-                    source.close()
+        # Od końca dokumentu, żeby numery stron odnosiły się do oryginału.
+        ordered = sorted(
+            enumerate(prepared), key=lambda pair: (pair[1].anchor, pair[0]), reverse=True
+        )
+        for _, operation in ordered:
+            source = _open_pdf(Path(operation.path))
+            try:
+                inserted += source.page_count
+                if operation.mode == "insert":
+                    doc.insert_pdf(source, start_at=operation.after_page)
+                else:
+                    start = operation.replace_from - 1
+                    end = operation.replace_to - 1
+                    replaced += end - start + 1
+                    doc.delete_pages(start, end)
+                    doc.insert_pdf(source, start_at=start)
+            finally:
+                source.close()
 
         page_after = doc.page_count
-        handle, name = tempfile.mkstemp(prefix="pdfnum-splice-", suffix=".pdf")
-        os.close(handle)
-        temp_path = Path(name)
-        doc.save(str(temp_path))
+
+        if number:
+            handle, name = tempfile.mkstemp(prefix="pdfnum-splice-", suffix=".pdf")
+            os.close(handle)
+            temp_path = Path(name)
+            doc.save(str(temp_path))
+            output_path = resolve_output(
+                main_path, suffix=options.suffix, overwrite=options.overwrite
+            )
+            numbered = number_pdf(temp_path, options, destination=output_path)
+            output = numbered.output_path
+        else:
+            output = resolve_output(
+                main_path, suffix=ASSEMBLED_SUFFIX, overwrite=options.overwrite
+            )
+            _save_atomically(doc, output)
+            numbered = None
     finally:
         doc.close()
-
-    try:
-        output_path = resolve_output(
-            main_path, suffix=options.suffix, overwrite=options.overwrite
-        )
-        numbered = number_pdf(temp_path, options, destination=output_path)
-    finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
 
     return SpliceResult(
-        output_path=numbered.output_path,
+        output_path=output,
         page_count_before=before,
         page_count_after=page_after,
         inserted_pages=inserted,

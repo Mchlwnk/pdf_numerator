@@ -258,8 +258,24 @@
   .folder-progress .bar { flex: 1; }
   .composer { padding: 20px 22px 22px; }
   .composer h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 16px; }
-  .dropzone.compact { padding: 16px; gap: 2px; }
-  .dropzone.compact .dz-title { font-size: 14px; }
+  .dropzone.compact { padding: 12px 14px; gap: 2px; }
+  .dropzone.compact .dz-title { font-size: 13.5px; }
+  .insert-list { margin-top: 10px; max-height: 360px; }
+  .insert-list li { display: block; padding: 8px 10px; }
+  .insert-head { display: flex; align-items: center; gap: 8px; }
+  .insert-head .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .insert-head .out { flex: none; color: var(--muted); font-size: 12px; }
+  .insert-op {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 6px; font-size: 12.5px; color: var(--muted);
+  }
+  .insert-op label {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-weight: 500; color: var(--ink); cursor: pointer;
+  }
+  .insert-op input[type="number"] { width: 62px; padding: 3px 6px; font-size: 12.5px; }
+  .insert-op input[type="number"]:disabled { opacity: .45; }
+  .insert-op .range-sep { color: var(--muted); }
   .composer-summary {
     margin-top: 4px; padding: 10px 12px; border-radius: 9px; font-size: 13px;
     background: #f7f8fc; border: 1px solid var(--line); color: var(--muted);
@@ -362,49 +378,30 @@
 
       <div class="field">
         <span class="label">Dokument główny</span>
-        <div class="inline">
-          <button class="secondary" id="pickMainBtn">Wybierz główny PDF...</button>
-          <span class="hint" id="mainInfo">nie wybrano</span>
+        <div class="dropzone compact" id="mainDropzone" tabindex="0" role="button"
+             aria-label="Wybierz lub przeciągnij główny dokument PDF">
+          <div class="dz-title" id="mainDropTitle">Przeciągnij główny PDF tutaj</div>
+          <div class="dz-sub" id="mainDropSub">albo kliknij, aby wybrać z dysku</div>
         </div>
         <input type="file" id="mainFileInput" accept="application/pdf,.pdf" class="hidden">
       </div>
 
       <div class="field">
-        <span class="label">Co zrobić ze stronami z plików poniżej</span>
-        <div class="chips">
-          <label class="checkline"><input type="radio" name="spliceMode" value="insert" checked> wstaw w dokumencie</label>
-          <label class="checkline"><input type="radio" name="spliceMode" value="replace"> zastąp strony</label>
-        </div>
-      </div>
-
-      <div class="row" id="insertFields">
-        <div class="field">
-          <label class="label" for="afterPage">Wstaw po stronie</label>
-          <input type="number" id="afterPage" min="0" step="1" value="0">
-          <div class="hint">0 = na początku, 1 = po pierwszej stronie, N = po stronie N.</div>
-        </div>
-      </div>
-
-      <div class="row hidden" id="replaceFields">
-        <div class="field">
-          <label class="label" for="replaceFrom">Zastąp od strony</label>
-          <input type="number" id="replaceFrom" min="1" step="1" value="1">
-        </div>
-        <div class="field">
-          <label class="label" for="replaceTo">do strony</label>
-          <input type="number" id="replaceTo" min="1" step="1" value="1">
-        </div>
+        <label class="checkline">
+          <input type="checkbox" id="numberAfter" checked>
+          <span>numeruj strony po złożeniu (ustawienia numeracji poniżej)</span>
+        </label>
       </div>
 
       <div class="field">
-        <span class="label">Pliki do wstawienia (kolejność ma znaczenie)</span>
+        <span class="label">Pliki dodatkowe — dla każdego wybierz miejsce</span>
         <div class="dropzone compact" id="insertDropzone" tabindex="0" role="button"
              aria-label="Dodaj pliki PDF do wstawienia">
           <div class="dz-title">Dodaj pliki PDF</div>
           <div class="dz-sub">kliknij albo przeciągnij tutaj</div>
         </div>
         <input type="file" id="insertFileInput" accept="application/pdf,.pdf" multiple class="hidden">
-        <ul class="filelist hidden" id="insertList"></ul>
+        <ul class="filelist insert-list hidden" id="insertList"></ul>
       </div>
 
       <div class="composer-summary" id="spliceSummary">Wybierz dokument główny i pliki do wstawienia.</div>
@@ -816,7 +813,8 @@
       maskHeight: el("maskHeight").value,
       mirror: el("mirror").checked,
       suffix: el("suffix").value,
-      recursive: el("recursive").checked
+      recursive: el("recursive").checked,
+      numberAfter: el("numberAfter").checked
     };
   }
 
@@ -867,6 +865,7 @@
     setValue("mirror", data.mirror);
     setValue("suffix", data.suffix);
     setValue("recursive", data.recursive);
+    setValue("numberAfter", data.numberAfter);
     updateOpacityLabel();
   }
 
@@ -890,6 +889,7 @@
     el("maskHeight").value = "5";
     el("mirror").checked = false;
     el("suffix").value = "_numerowany";
+    el("numberAfter").checked = true;
     updateOpacityLabel();
     updatePreviewExample();
     schedulePreview(0);
@@ -930,8 +930,12 @@
       var count = state.folder ? state.folder.pdf_count : 0;
       runBtn.textContent = count ? "Ponumeruj " + count + " " + fileWord(count) : "Ponumeruj cały folder";
     } else if (state.mode === "splice") {
-      var replace = spliceMode() === "replace";
-      runBtn.textContent = replace ? "Zastąp i ponumeruj" : "Wstaw i ponumeruj";
+      var numbering = el("numberAfter").checked;
+      var modes = state.splice.inserts.map(function (item) { return item.mode; });
+      var onlyInsert = modes.length > 0 && modes.every(function (item) { return item === "insert"; });
+      var onlyReplace = modes.length > 0 && modes.every(function (item) { return item === "replace"; });
+      var verb = onlyReplace ? "Zastąp" : (onlyInsert ? "Wstaw" : "Złóż");
+      runBtn.textContent = numbering ? verb + " i ponumeruj" : verb + " bez numeracji";
     } else {
       runBtn.textContent = "Ponumeruj strony";
     }
@@ -1208,13 +1212,8 @@
   });
 
   // --- wstaw / zastąp strony ------------------------------------------------
-  function spliceMode() {
-    var checked = document.querySelector('input[name="spliceMode"]:checked');
-    return checked ? checked.value : "insert";
-  }
-
   function stageForSplice(file) {
-    return fetch("/api/stage?name=" + encodeURIComponent(file.name) + "&append=1", {
+    return fetch("/api/stage?name=" + encodeURIComponent(file.name), {
       method: "POST",
       headers: { "X-Token": TOKEN, "Content-Type": "application/pdf" },
       body: file
@@ -1238,11 +1237,9 @@
       pages: info.page_count,
       staged: !!info.staged
     };
-    el("mainInfo").textContent = info.name + " · " + info.page_count + " " +
-      pageWord(info.page_count) + (info.staged ? " · kopia tymczasowa" : "");
-    el("afterPage").max = String(info.page_count);
-    el("replaceFrom").max = String(info.page_count);
-    el("replaceTo").max = String(info.page_count);
+    el("mainDropTitle").textContent = info.name;
+    el("mainDropSub").textContent = info.page_count + " " + pageWord(info.page_count) +
+      (info.staged ? " · kopia tymczasowa" : "") + " — kliknij, aby zmienić";
     updateSpliceSummary();
   }
 
@@ -1275,7 +1272,11 @@
           state.splice.inserts.push({
             path: info.path,
             name: info.name,
-            pages: info.page_count
+            pages: info.page_count,
+            mode: "insert",
+            after: state.splice.main ? state.splice.main.pages : 0,
+            from: 1,
+            to: 1
           });
         });
         renderInserts();
@@ -1312,7 +1313,11 @@
         state.splice.inserts.push({
           path: info.path,
           name: info.name,
-          pages: info.page_count
+          pages: info.page_count,
+          mode: "insert",
+          after: state.splice.main ? state.splice.main.pages : 0,
+          from: 1,
+          to: 1
         });
       });
       renderInserts();
@@ -1335,12 +1340,27 @@
     return button;
   }
 
+  function numberInput(className, value, minimum) {
+    var input = document.createElement("input");
+    input.type = "number";
+    input.min = String(minimum);
+    input.step = "1";
+    input.className = className;
+    input.value = String(value);
+    return input;
+  }
+
   function renderInserts() {
     var list = el("insertList");
     var items = state.splice.inserts;
     list.innerHTML = "";
+
     items.forEach(function (item, index) {
       var row = document.createElement("li");
+      row.dataset.index = String(index);
+
+      var head = document.createElement("div");
+      head.className = "insert-head";
       var name = document.createElement("span");
       name.className = "name";
       name.textContent = (index + 1) + ". " + item.name;
@@ -1352,94 +1372,169 @@
       actions.appendChild(insertButton("↑", "up", index, index === 0));
       actions.appendChild(insertButton("↓", "down", index, index === items.length - 1));
       actions.appendChild(insertButton("✕", "remove", index, false));
-      row.appendChild(name);
-      row.appendChild(meta);
-      row.appendChild(actions);
+      head.appendChild(name);
+      head.appendChild(meta);
+      head.appendChild(actions);
+
+      var op = document.createElement("div");
+      op.className = "insert-op";
+
+      var insertLabel = document.createElement("label");
+      var insertRadio = document.createElement("input");
+      insertRadio.type = "radio";
+      insertRadio.name = "op-mode-" + index;
+      insertRadio.value = "insert";
+      insertRadio.checked = item.mode === "insert";
+      insertLabel.appendChild(insertRadio);
+      insertLabel.appendChild(document.createTextNode(" wstaw po stronie"));
+
+      var after = numberInput("op-after", item.after, 0);
+
+      var replaceLabel = document.createElement("label");
+      var replaceRadio = document.createElement("input");
+      replaceRadio.type = "radio";
+      replaceRadio.name = "op-mode-" + index;
+      replaceRadio.value = "replace";
+      replaceRadio.checked = item.mode === "replace";
+      replaceLabel.appendChild(replaceRadio);
+      replaceLabel.appendChild(document.createTextNode(" zastąp strony"));
+
+      var from = numberInput("op-from", item.from, 1);
+      var separator = document.createElement("span");
+      separator.className = "range-sep";
+      separator.textContent = "–";
+      var to = numberInput("op-to", item.to, 1);
+
+      op.appendChild(insertLabel);
+      op.appendChild(after);
+      op.appendChild(replaceLabel);
+      op.appendChild(from);
+      op.appendChild(separator);
+      op.appendChild(to);
+
+      row.appendChild(head);
+      row.appendChild(op);
       list.appendChild(row);
+      applyRowState(row, item);
     });
+
     list.classList.toggle("hidden", items.length === 0);
     updateSpliceSummary();
+  }
+
+  function applyRowState(row, item) {
+    var replace = item.mode === "replace";
+    var after = row.querySelector(".op-after");
+    var from = row.querySelector(".op-from");
+    var to = row.querySelector(".op-to");
+    if (after) after.disabled = replace;
+    if (from) from.disabled = !replace;
+    if (to) to.disabled = !replace;
   }
 
   function updateSpliceSummary() {
     var main = state.splice.main;
     var inserts = state.splice.inserts;
-    var insertedPages = inserts.reduce(function (sum, item) {
-      return sum + (item.pages || 0);
-    }, 0);
+    var numbering = el("numberAfter").checked;
     var box = el("spliceSummary");
     box.classList.remove("ready", "invalid");
+
+    var insertedPages = 0;
+    var replacedPages = 0;
+    var ranges = [];
+    inserts.forEach(function (item, index) {
+      insertedPages += item.pages || 0;
+      if (item.mode === "replace") {
+        replacedPages += Math.max(0, item.to - item.from + 1);
+        ranges.push({ from: item.from, to: item.to, index: index });
+      }
+    });
 
     var ready = false;
     var text;
 
     if (!main) {
-      text = "Wybierz dokument główny i pliki do wstawienia.";
+      text = "Przeciągnij dokument główny (albo kliknij) i dodaj pliki dodatkowe.";
     } else if (!inserts.length) {
       text = "Dokument główny: " + main.pages + " " + pageWord(main.pages) +
-        ". Dodaj pliki do wstawienia.";
-    } else if (spliceMode() === "insert") {
-      var after = clamp(Math.round(numeric("afterPage", 0)), 0, main.pages);
-      var resultPages = main.pages + insertedPages;
-      text = "Dokument główny ma " + main.pages + " " + pageWord(main.pages) +
-        ", wstawiasz " + inserts.length + " " + fileWord(inserts.length) + " (" +
-        insertedPages + " " + pageWord(insertedPages) + ") po stronie " + after +
-        ". Wynik: " + resultPages + " " + pageWord(resultPages) + ".";
-      ready = true;
+        ". Dodaj pliki dodatkowe.";
     } else {
-      var from = Math.round(numeric("replaceFrom", 1));
-      var to = Math.round(numeric("replaceTo", 1));
-      if (from < 1 || to < from || to > main.pages) {
-        text = "Zakres " + from + "-" + to + " jest niepoprawny - dokument ma " +
-          main.pages + " " + pageWord(main.pages) + ".";
+      var problems = [];
+      inserts.forEach(function (item, index) {
+        if (item.mode === "replace") {
+          if (!(item.from >= 1 && item.to >= item.from && item.to <= main.pages)) {
+            problems.push((index + 1) + ". " + item.name + ": zakres " + item.from +
+              "-" + item.to + " jest poza dokumentem (1-" + main.pages + ").");
+          }
+        } else if (!(item.after >= 0 && item.after <= main.pages)) {
+          problems.push((index + 1) + ". " + item.name + ": nie można wstawić po stronie " +
+            item.after + " (dokument ma " + main.pages + " stron).");
+        }
+      });
+      ranges.sort(function (a, b) { return a.from - b.from; });
+      for (var index = 1; index < ranges.length; index += 1) {
+        if (ranges[index].from <= ranges[index - 1].to) {
+          problems.push("Zakresy zastępowania nakładają się (pliki " +
+            (ranges[index - 1].index + 1) + " i " + (ranges[index].index + 1) + ").");
+        }
+      }
+
+      if (problems.length) {
+        text = problems[0] + (problems.length > 1 ? " (+" + (problems.length - 1) + ")" : "");
         box.classList.add("invalid");
       } else {
-        var replaced = to - from + 1;
-        var afterReplace = main.pages - replaced + insertedPages;
-        text = "Zastępujesz strony " + from + "-" + to + " (" + replaced + " " +
-          pageWord(replaced) + ") plikami: " + inserts.length + " " +
-          fileWord(inserts.length) + " (" + insertedPages + " " +
-          pageWord(insertedPages) + "). Wynik: " + afterReplace + " " +
-          pageWord(afterReplace) + ".";
+        var resultPages = main.pages - replacedPages + insertedPages;
+        var parts = [];
+        if (insertedPages) {
+          parts.push("wstawiasz " + insertedPages + " " + pageWord(insertedPages));
+        }
+        if (replacedPages) {
+          parts.push("zastępujesz " + replacedPages + " " + pageWord(replacedPages));
+        }
+        text = "Dokument główny: " + main.pages + " " + pageWord(main.pages) + " · " +
+          parts.join(", ") + " · wynik: " + resultPages + " " + pageWord(resultPages) +
+          (numbering ? " (z numeracją)" : " (bez numeracji)") + ".";
         ready = true;
       }
     }
 
     box.textContent = text;
     if (ready) box.classList.add("ready");
+
     if (state.mode === "splice") {
-      workspace.classList.toggle("hidden", !ready);
+      workspace.classList.toggle("hidden", !(ready && numbering));
       runBtn.disabled = state.busy || !ready;
     }
+    updateRunLabel();
   }
 
   function runSplice() {
     var main = state.splice.main;
     if (!main || !state.splice.inserts.length) return;
 
+    var numbering = el("numberAfter").checked;
     var options = collectOptions();
-    if (options.template.indexOf("{n") === -1) {
+    if (numbering && options.template.indexOf("{n") === -1) {
       showError("Format numeru musi zawierać znacznik {n}, np. „{n} / {total}”.");
       return;
     }
 
-    var mode = spliceMode();
-    var spec = { mode: mode };
-    if (mode === "insert") {
-      spec.after_page = clamp(Math.round(numeric("afterPage", 0)), 0, main.pages);
-    } else {
-      spec.replace_from = Math.round(numeric("replaceFrom", 1));
-      spec.replace_to = Math.round(numeric("replaceTo", 1));
-    }
-
     clearError();
     el("resultCard").classList.add("hidden");
-    setBusy(true, mode === "insert" ? "Wstawiam strony i numeruję..." : "Zastępuję strony i numeruję...");
+    setBusy(true, numbering ? "Składam dokument i numeruję..." : "Składam dokument...");
 
     api("/api/splice", {
       main: main.path,
-      inserts: state.splice.inserts.map(function (item) { return item.path; }),
-      spec: spec,
+      inserts: state.splice.inserts.map(function (item) {
+        return {
+          path: item.path,
+          mode: item.mode,
+          after_page: item.after,
+          replace_from: item.from,
+          replace_to: item.to
+        };
+      }),
+      number: numbering,
       options: options
     }).then(function (result) {
       return result.staged ? downloadResult(result) : result;
@@ -1456,20 +1551,30 @@
     resetResult();
     state.lastResult = result;
     el("resultCard").classList.remove("hidden");
-    var action = result.replaced_pages
-      ? "Zastąpiono " + result.replaced_pages + " " + pageWord(result.replaced_pages)
-      : "Wstawiono " + result.inserted_pages + " " + pageWord(result.inserted_pages);
+
+    var parts = [];
+    if (result.inserted_pages) {
+      parts.push("wstawiono " + result.inserted_pages + " " + pageWord(result.inserted_pages));
+    }
+    if (result.replaced_pages) {
+      parts.push("zastąpiono " + result.replaced_pages + " " + pageWord(result.replaced_pages));
+    }
+    var numbering = result.numbered
+      ? ", numeracja " + result.first_number + "-" + result.last_number
+      : "";
     el("resultTitle").textContent = "Gotowe";
-    el("resultSub").textContent = action + " - dokument ma teraz " +
-      result.page_count_after + " " + pageWord(result.page_count_after) +
-      ", numeracja " + result.first_number + "-" + result.last_number + ".";
+    el("resultSub").textContent = parts.join(", ") + " — dokument ma teraz " +
+      result.page_count_after + " " + pageWord(result.page_count_after) + numbering + ".";
     el("resultPath").textContent = result.uploaded ? result.output_name : result.output;
     el("revealBtn").classList.toggle("hidden", !!result.uploaded);
     el("openBtn").classList.toggle("hidden", !!result.uploaded);
     el("resultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  el("pickMainBtn").addEventListener("click", pickMain);
+  el("mainDropzone").addEventListener("click", pickMain);
+  el("mainDropzone").addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pickMain(); }
+  });
   el("mainFileInput").addEventListener("change", function () {
     var file = el("mainFileInput").files && el("mainFileInput").files[0];
     if (file) setMainFromFile(file);
@@ -1485,36 +1590,68 @@
     if (files && files.length) addInsertFiles(files);
     el("insertFileInput").value = "";
   });
-  ["dragenter", "dragover"].forEach(function (type) {
-    el("insertDropzone").addEventListener(type, function (event) {
+
+  [["mainDropzone", null], ["insertDropzone", "inserts"]].forEach(function (pair) {
+    var zone = el(pair[0]);
+    ["dragenter", "dragover"].forEach(function (type) {
+      zone.addEventListener(type, function (event) {
+        if (!event.dataTransfer) return;
+        event.preventDefault();
+        zone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach(function (type) {
+      zone.addEventListener(type, function () { zone.classList.remove("dragover"); });
+    });
+    zone.addEventListener("drop", function (event) {
       if (!event.dataTransfer) return;
       event.preventDefault();
-      el("insertDropzone").classList.add("dragover");
+      event.stopPropagation();
+      var files = Array.prototype.slice.call(event.dataTransfer.files || []);
+      if (!files.length) return;
+      if (pair[1] === "inserts") {
+        addInsertFiles(files);
+      } else {
+        setMainFromFile(files[0]);
+        if (files.length > 1) addInsertFiles(files.slice(1));
+      }
     });
-  });
-  ["dragleave", "drop"].forEach(function (type) {
-    el("insertDropzone").addEventListener(type, function () {
-      el("insertDropzone").classList.remove("dragover");
-    });
-  });
-  el("insertDropzone").addEventListener("drop", function (event) {
-    if (!event.dataTransfer) return;
-    event.preventDefault();
-    event.stopPropagation();
-    addInsertFiles(event.dataTransfer.files);
   });
 
-  document.querySelectorAll('input[name="spliceMode"]').forEach(function (radio) {
-    radio.addEventListener("change", function () {
-      var replace = spliceMode() === "replace";
-      el("insertFields").classList.toggle("hidden", replace);
-      el("replaceFields").classList.toggle("hidden", !replace);
-      updateRunLabel();
-      updateSpliceSummary();
-    });
+  el("numberAfter").addEventListener("change", function () {
+    scheduleSave();
+    updateSpliceSummary();
   });
-  ["afterPage", "replaceFrom", "replaceTo"].forEach(function (id) {
-    el(id).addEventListener("input", updateSpliceSummary);
+
+  el("insertList").addEventListener("change", function (event) {
+    var row = event.target.closest("li[data-index]");
+    if (!row) return;
+    var index = Number(row.dataset.index);
+    var item = state.splice.inserts[index];
+    if (!item) return;
+    if (event.target.matches('input[type="radio"]')) {
+      item.mode = event.target.value;
+      applyRowState(row, item);
+      updateSpliceSummary();
+    }
+  });
+
+  el("insertList").addEventListener("input", function (event) {
+    var row = event.target.closest("li[data-index]");
+    if (!row) return;
+    var index = Number(row.dataset.index);
+    var item = state.splice.inserts[index];
+    if (!item) return;
+    var value = Math.round(Number(event.target.value));
+    if (!isFinite(value)) return;
+    if (event.target.classList.contains("op-after")) {
+      item.after = Math.max(0, value);
+    } else if (event.target.classList.contains("op-from")) {
+      item.from = Math.max(1, value);
+    } else if (event.target.classList.contains("op-to")) {
+      item.to = Math.max(1, value);
+    }
+    updateSpliceSummary();
   });
 
   el("insertList").addEventListener("click", function (event) {

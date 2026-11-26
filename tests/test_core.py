@@ -17,7 +17,7 @@ from numerator import (  # noqa: E402
     NumberingError,
     OptionsError,
     PathError,
-    SpliceOptions,
+    SpliceOperation,
     build_plan,
     number_pdf,
     parse_hex_color,
@@ -515,8 +515,7 @@ def main() -> int:
         third = labeled(tmp / "trzeci.pdf", ["C1"])
         main_digest = hashlib.sha256(main_doc.read_bytes()).hexdigest()
 
-        result = splice_pdfs(main_doc, [extra], NumberOptions(),
-                             SpliceOptions(mode="insert", after_page=2))
+        result = splice_pdfs(main_doc, [SpliceOperation(extra, after_page=2)])
         with pymupdf.open(result.output_path) as doc:
             texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
             numbers = [labels_in_band(doc[i]) for i in range(doc.page_count)]
@@ -528,27 +527,28 @@ def main() -> int:
         check("oryginał nietknięty",
               hashlib.sha256(main_doc.read_bytes()).hexdigest() == main_digest)
 
-        result = splice_pdfs(main_doc, [extra], NumberOptions(),
-                             SpliceOptions(mode="insert", after_page=0))
+        result = splice_pdfs(main_doc, [SpliceOperation(extra, after_page=0)])
         with pymupdf.open(result.output_path) as doc:
             texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
         check("wstawienie na początku", texts[:2] == ["B1", "B2"], str(texts))
 
-        result = splice_pdfs(main_doc, [extra], NumberOptions(),
-                             SpliceOptions(mode="insert", after_page=4))
+        result = splice_pdfs(main_doc, [SpliceOperation(extra, after_page=4)])
         with pymupdf.open(result.output_path) as doc:
             texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
         check("wstawienie na końcu", texts[-2:] == ["B1", "B2"], str(texts))
 
-        result = splice_pdfs(main_doc, [extra, third], NumberOptions(),
-                             SpliceOptions(mode="insert", after_page=1))
+        result = splice_pdfs(main_doc, [
+            SpliceOperation(extra, after_page=1),
+            SpliceOperation(third, after_page=1),
+        ])
         with pymupdf.open(result.output_path) as doc:
             texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
         check("kilka plików w kolejności",
               texts == ["A1", "B1", "B2", "C1", "A2", "A3", "A4"], str(texts))
 
-        result = splice_pdfs(main_doc, [extra], NumberOptions(),
-                             SpliceOptions(mode="replace", replace_from=2, replace_to=3))
+        result = splice_pdfs(main_doc, [
+            SpliceOperation(extra, mode="replace", replace_from=2, replace_to=3)
+        ])
         with pymupdf.open(result.output_path) as doc:
             texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
         check("zastąpienie: liczba stron", result.page_count_after == 4,
@@ -558,19 +558,47 @@ def main() -> int:
         check("zastąpienie: zawartość",
               texts == ["A1", "B1", "B2", "A4"], str(texts))
 
-        for name, spec in (
-            ("wstawienie poza dokumentem", SpliceOptions(mode="insert", after_page=9)),
-            ("zakres poza dokumentem", SpliceOptions(mode="replace", replace_from=3,
-                                                     replace_to=9)),
+        result = splice_pdfs(main_doc, [
+            SpliceOperation(extra, mode="replace", replace_from=2, replace_to=3),
+            SpliceOperation(third, after_page=4),
+        ])
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+        check("mieszane operacje per plik",
+              texts == ["A1", "B1", "B2", "A4", "C1"], str(texts))
+
+        result = splice_pdfs(main_doc, [SpliceOperation(extra, after_page=2)], number=False)
+        check("bez numeracji: nazwa", result.output_path.name == "glowny_zlozony.pdf",
+              result.output_path.name)
+        check("bez numeracji: brak wyniku numerowania", result.numbered is None)
+        with pymupdf.open(result.output_path) as doc:
+            texts = [doc[i].get_text().strip().splitlines()[0] for i in range(doc.page_count)]
+            numbers = [labels_in_band(doc[i]) for i in range(doc.page_count)]
+        check("bez numeracji: kolejność",
+              texts == ["A1", "A2", "B1", "B2", "A3", "A4"], str(texts))
+        check("bez numeracji: brak numerów", numbers == [""] * 6, str(numbers))
+
+        for name, operations in (
+            ("wstawienie poza dokumentem", [SpliceOperation(extra, after_page=9)]),
+            ("zakres poza dokumentem", [SpliceOperation(extra, mode="replace",
+                                                        replace_from=3, replace_to=9)]),
+            ("nakładające się zakresy", [
+                SpliceOperation(extra, mode="replace", replace_from=1, replace_to=3),
+                SpliceOperation(third, mode="replace", replace_from=2, replace_to=4),
+            ]),
+            ("wstawka w zastępowanym zakresie", [
+                SpliceOperation(extra, mode="replace", replace_from=2, replace_to=3),
+                SpliceOperation(third, after_page=1),
+            ]),
         ):
             try:
-                splice_pdfs(main_doc, [extra], NumberOptions(), spec)
+                splice_pdfs(main_doc, operations)
                 check(name, False, "brak wyjątku")
             except AssembleError:
                 check(name, True)
 
         try:
-            splice_pdfs(main_doc, [], NumberOptions(), SpliceOptions())
+            splice_pdfs(main_doc, [])
             check("brak plików do wstawienia", False, "brak wyjątku")
         except AssembleError:
             check("brak plików do wstawienia", True)

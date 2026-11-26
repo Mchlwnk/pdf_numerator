@@ -310,8 +310,8 @@ def main() -> int:
 
             status, _, body = call(base + "/api/splice", payload={
                 "main": str(splice_main),
-                "inserts": [staged_insert["path"]],
-                "spec": {"mode": "insert", "after_page": 1},
+                "inserts": [{"path": staged_insert["path"], "mode": "insert",
+                             "after_page": 1}],
                 "options": {"template": "{n}"},
             })
             spliced = json.loads(body)
@@ -327,8 +327,8 @@ def main() -> int:
 
             status, _, body = call(base + "/api/splice", payload={
                 "main": str(splice_main),
-                "inserts": [staged_insert["path"]],
-                "spec": {"mode": "replace", "replace_from": 2, "replace_to": 3},
+                "inserts": [{"path": staged_insert["path"], "mode": "replace",
+                             "replace_from": 2, "replace_to": 3}],
                 "options": {"template": "{n}"},
             })
             replaced = json.loads(body)
@@ -337,8 +337,22 @@ def main() -> int:
                   str(replaced.get("page_count_after")))
 
             status, _, body = call(base + "/api/splice", payload={
-                "main": str(splice_main), "inserts": [staged_insert["path"]],
-                "spec": {"mode": "insert", "after_page": 99},
+                "main": str(splice_main),
+                "inserts": [{"path": staged_insert["path"], "mode": "insert",
+                             "after_page": 2}],
+                "number": False,
+            })
+            unnumbered = json.loads(body)
+            check("splice bez numeracji", status == 200 and unnumbered["numbered"] is False,
+                  body[:200])
+            check("splice bez numeracji: nazwa",
+                  unnumbered["output_name"] == "splice-main_zlozony.pdf",
+                  unnumbered.get("output_name"))
+
+            status, _, body = call(base + "/api/splice", payload={
+                "main": str(splice_main),
+                "inserts": [{"path": staged_insert["path"], "mode": "insert",
+                             "after_page": 99}],
             })
             check("splice: pozycja poza dokumentem", status == 400, str(status))
             status, _, body = call(base + "/api/splice", payload={

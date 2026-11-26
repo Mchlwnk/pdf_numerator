@@ -19,7 +19,8 @@ Kod na licencji MIT, całość (z PyMuPDF) na AGPL-3.0 — szczegóły w [LICENS
 - **tryb folderu** - numeruje wszystkie PDF-y w katalogu (opcjonalnie z podfolderami),
   jedne ustawienia dla wszystkich plików, lista z postępem „plik po pliku",
 - **wstawianie i zastępowanie stron** - dołóż jeden lub kilka PDF-ów w wybrane miejsce
-  głównego dokumentu albo zastąp nimi wybrane strony; wynik jest od razu numerowany,
+  głównego dokumentu albo zastąp nimi wybrane strony; numerację wyniku możesz włączyć
+  lub wyłączyć,
 - **style cyfr** - arabskie, rzymskie (`i, ii, III`) i litery (`a, b`), także **osobna
   numeracja dodatku** (np. treść 1–20, dodatek i–v),
 - **maskowanie starego numeru** - biały prostokąt w miejscu nowego numeru,
@@ -66,11 +67,12 @@ Dwa tryby pracy (przełącznik u góry):
   podfoldery" podpowiada, gdy w podfolderach są jeszcze pliki PDF. Kopie powstają
   obok oryginałów (kolejne uruchomienie dodaje `_2`, `_3`...), pliki `*_numerowany`
   są pomijane, a błąd jednego pliku nie przerywa reszty.
-- **Wstaw / zastąp strony** — wybierasz dokument główny, określasz miejsce („wstaw po
-  stronie N", gdzie 0 = początek, albo „zastąp strony od A do B") i dodajesz jeden lub
-  kilka PDF-ów w wybranej kolejności. Program składa dokument, a potem numeruje wynik
-  jednym zestawem ustawień. Oryginał zostaje nietknięty — powstaje kopia
-  `nazwa_numerowany.pdf`.
+- **Wstaw / zastąp strony** — przeciągasz dokument główny (albo klikasz i wybierasz),
+  a potem jeden lub kilka PDF-ów. **Dla każdego pliku osobno** wybierasz, czy ma być
+  wstawiony po wskazanej stronie, czy zastąpić zakres stron — numery odnoszą się do
+  oryginalnego dokumentu. Checkbox „numeruj strony po złożeniu" decyduje, czy wynik
+  dostanie numery: z numeracją powstaje `nazwa_numerowany.pdf`, bez niej
+  `nazwa_zlozony.pdf`. Oryginał zostaje nietknięty.
 
 Opcje: pozycja numeru (siatka 3×3), numeracja naprzemienna, format (`{n}`, `{n} / {total}`,
 `Strona {n} z {total}`), styl cyfr, dodatek od wskazanej strony, zakresy stron,
